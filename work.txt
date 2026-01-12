@@ -1,0 +1,56 @@
+Project: DVPN (Anchor + Solana)
+
+Overview:
+- On-chain program: `programs/dvpn` (Rust Anchor program).
+- Deployed program id: 2CK6gCxcfaX5JuCfJRnn7ZBf6V5ZpiK69T9yeHRJP7Vq (Testnet).
+- Upgrade authority / wallet: 5wm7gTHTFEGsZm6oMgsk84tqh4twVYrVGCSkPKPv8Pyo (wallet.json).
+
+What I worked on (summary):
+- Diagnosed and fixed local build environment (platform-tools permission issue).
+- Built and deployed the Anchor program to Testnet, preserving the requested program id.
+- Fixed and normalized `target/idl/dvpn.json` so the TypeScript client could use the IDL.
+- Implemented and iterated TypeScript/Node scripts to perform MVP on-chain actions.
+
+Added scripts (workspace-relative):
+- `scripts/mvp.ts` - TypeScript script that creates Provider and Node (uses node id=0). Sends manual transactions where Anchor caused writable-privilege issues.
+- `scripts/compute_many_pdas.js` - offline PDA permutation helper (search variants).
+- `scripts/compute_exhaustive_pdas.js` / `_verbose.js` - exhaustive offline PDA search (found exact seed composition).
+- `scripts/find_node_pda.js` - (diagnostic, brute-force simulation) - used during debugging.
+- `scripts/fetch_node.js` - fetch and decode `Node` account using IDL.
+- `scripts/fetch_provider_and_sessions.js` - fetch Provider and attempt Session PDAs 0..4.
+- `scripts/scan_sessions.js` - scan program accounts for Session discriminator (found none).
+- `scripts/node_daemon.js` - simple poller daemon for Node + Provider.
+- `scripts/node_daemon_server.js` - HTTP server exposing endpoints:
+    - GET /node -> node info (endpoint, region, wg_server_pubkey, node_id)
+    - GET /session/:pda -> fetch session account
+    - POST /session {keypairPath, sessionId, minutes} -> create on-chain session (server loads local keypair to sign)
+
+What is working / verified on Testnet:
+- `anchor build` and `anchor deploy` completed successfully; IDL uploaded and program confirmed on-chain.
+- Provider account created on-chain (PDA: 43y5RPkeFTrLz6ECNpKKT5vthuS9ge6WeaJwsi4gUFx7).
+- Node account created on-chain (PDA: EG4d3Y7rmEFvsCjTFWhxY71mDrhZb5NoYx2bqQdhSpfZ) using seed ["node", provider, node_id=0 (u64 LE)].
+- Session creation works: created session PDA ArwiKL7gFKWLDBtP5bPS1LyNESyMoiiyd1yjSbUU2Mkm (session id 0) and decoded it.
+- Fetch scripts decode on-chain `Node`, `Provider`, and `Session` accounts.
+- Node daemon and HTTP server run locally and successfully created a session via POST.
+
+How to reproduce locally (examples):
+- Build & deploy (local machine):
+  - `anchor build`
+  - `anchor deploy --provider.cluster testnet` (ensure `wallet.json` funded)
+- Run MVP script (create provider + node):
+  - `ANCHOR_PROVIDER_URL=https://api.testnet.solana.com ANCHOR_WALLET=wallet.json npm run mvp`
+- Run daemon poller:
+  - `ANCHOR_PROVIDER_URL=https://api.testnet.solana.com ANCHOR_WALLET=wallet.json npm run node-daemon`
+- Run HTTP daemon server:
+  - `ANCHOR_PROVIDER_URL=https://api.testnet.solana.com ANCHOR_WALLET=wallet.json npm run node-daemon-server`
+  - `curl http://localhost:3000/node`
+  - `curl -X POST http://localhost:3000/session -H "Content-Type: application/json" -d '{"keypairPath":"./user-keypair.json","sessionId":0,"minutes":60}'`
+
+Notes, caveats, and next suggestions:
+- The server currently loads local keypair JSON files to sign open_session txs — this is convenient for testing but not secure for production. Replace with wallet adapter or remote signing for production.
+- The `wg_server_pubkey` stored on-chain is currently zeroed in the test registration; update the Node registration with a real WireGuard pubkey to serve actual WG clients.
+- I left several diagnostic scripts (PDA search, scanning) in `scripts/` — remove or move to `scripts/dev/` if keeping the repo tidy.
+- If you want, I can (A) harden the server (auth + safer signing), (B) cleanup and prepare a commit, or (C) add docs/README for running these components.
+
+Contact / Next steps:
+- Tell me which of the above you want next (cleanup, hardening, documentation, more features).

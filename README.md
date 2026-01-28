@@ -604,7 +604,6 @@ For issues, questions, or contributions:
 - ✅ Dispute reporting and resolution
 - ✅ Multi-signature arbitration
 - ✅ Desktop Electron client
-- ✅ PostgreSQL indexer with REST API
 - ✅ Comprehensive test suite
 
 ### Future Roadmap

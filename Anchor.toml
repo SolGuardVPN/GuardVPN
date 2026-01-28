@@ -1,18 +1,18 @@
 [toolchain]
-anchor_version = "0.29.0"
+anchor_version = "0.32.0"
 
 [features]
-seeds = false
+resolution = true
 skip-lint = false
 
 [programs.localnet]
-dvpn = "2CK6gCxcfaX5JuCfJRnn7ZBf6V5ZpiK69T9yeHRJP7Vq"
+dvpn = "EYDWvx95gq6GhniDGHMHbn6DsigFhcWGHvHgbbxzuqQq"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "localnet"
 wallet = "wallet.json"
 
 [scripts]

@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Transaction - DVPN</title>
+  <!-- Buffer polyfill for browser compatibility -->
+  <script src="https://bundle.run/buffer@6.0.3"></script>
+  <script>window.Buffer = window.buffer.Buffer;</script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+    }
+    
+    .container {
+      text-align: center;
+      padding: 40px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+      width: 90%;
+    }
+    
+    h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+      color: #14F195;
+    }
+    
+    .subtitle {
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    
+    .tx-details {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+      text-align: left;
+    }
+    
+    .tx-details .row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    
+    .tx-details .label {
+      color: rgba(255, 255, 255, 0.6);
+    }
+    
+    .tx-details .value {
+      color: #14F195;
+      font-family: monospace;
+    }
+    
+    .tx-details .value.amount {
+      font-size: 20px;
+      font-weight: bold;
+    }
+    
+    .status {
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    
+    .status.pending {
+      background: rgba(255, 193, 7, 0.2);
+      border: 1px solid rgba(255, 193, 7, 0.5);
+      color: #ffc107;
+    }
+    
+    .status.success {
+      background: rgba(20, 241, 149, 0.2);
+      border: 1px solid rgba(20, 241, 149, 0.5);
+      color: #14F195;
+    }
+    
+    .status.error {
+      background: rgba(255, 82, 82, 0.2);
+      border: 1px solid rgba(255, 82, 82, 0.5);
+      color: #ff5252;
+    }
+    
+    .sign-btn {
+      background: linear-gradient(135deg, #9945FF 0%, #14F195 100%);
+      border: none;
+      color: white;
+      padding: 15px 30px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .sign-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(153, 69, 255, 0.4);
+    }
+    
+    .sign-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .cancel-btn {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      padding: 12px 25px;
+      font-size: 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 15px;
+      width: 100%;
+      transition: background 0.2s;
+    }
+    
+    .cancel-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔐 Subscription Payment</h1>
+    <p class="subtitle">Please sign the transaction in your Phantom wallet</p>
+    <p style="color: #ffc107; font-size: 12px; margin-bottom: 15px;">⚠️ Make sure Phantom is set to <strong>Devnet</strong> (Settings → Developer Settings → Change Network)</p>
+    
+    <div id="txDetails" class="tx-details">
+      <div class="row">
+        <span class="label">Network:</span>
+        <span class="value" style="color: #ffc107;">Devnet</span>
+      </div>
+      <div class="row">
+        <span class="label">Plan:</span>
+        <span class="value" id="planName">Loading...</span>
+      </div>
+      <div class="row">
+        <span class="label">Duration:</span>
+        <span class="value" id="duration">Loading...</span>
+      </div>
+      <div class="row">
+        <span class="label">Amount:</span>
+        <span class="value amount" id="amount">Loading...</span>
+      </div>
+      <div class="row">
+        <span class="label">From:</span>
+        <span class="value" id="fromWallet" style="font-size: 11px;">Loading...</span>
+      </div>
+      <div class="row">
+        <span class="label">To (Escrow):</span>
+        <span class="value" id="toEscrow" style="font-size: 11px;">Loading...</span>
+      </div>
+    </div>
+    
+    <div id="status" class="status pending">
+      <span class="spinner" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 8px;"></span>
+      Connecting to Phantom...
+    </div>
+    
+    <button id="signBtn" class="sign-btn hidden" onclick="signTransaction()">
+      <svg viewBox="0 0 24 24" fill="currentColor" style="width:24px;height:24px">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+      </svg>
+      Sign & Send Transaction
+    </button>
+    
+    <button class="cancel-btn" onclick="cancelTransaction()">Cancel</button>
+  </div>
+
+  <!-- Solana Web3.js from CDN -->
+  <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+  
+  <script>
+    let provider = null;
+    let txParams = null;
+    
+    // Parse URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    txParams = {
+      plan: urlParams.get('plan') || 'monthly',
+      priceSOL: parseFloat(urlParams.get('priceSOL')) || 0.1,
+      priceLamports: parseInt(urlParams.get('priceLamports')) || 100000000,
+      durationDays: parseInt(urlParams.get('durationDays')) || 30,
+      escrowPDA: urlParams.get('escrowPDA') || '',
+      walletAddress: urlParams.get('walletAddress') || ''
+    };
+    
+    console.log('Transaction params:', txParams);
+    
+    // Update display
+    document.getElementById('planName').textContent = txParams.plan.charAt(0).toUpperCase() + txParams.plan.slice(1);
+    document.getElementById('duration').textContent = txParams.durationDays + ' days';
+    document.getElementById('amount').textContent = txParams.priceSOL + ' SOL';
+    document.getElementById('fromWallet').textContent = txParams.walletAddress;
+    document.getElementById('toEscrow').textContent = txParams.escrowPDA;
+    
+    // Initialize on load
+    window.addEventListener('load', async () => {
+      // Check if solanaWeb3 loaded
+      if (typeof solanaWeb3 === 'undefined') {
+        document.getElementById('status').className = 'status error';
+        document.getElementById('status').innerHTML = '❌ Failed to load Solana library. Please refresh the page.';
+        return;
+      }
+      console.log('Solana Web3 loaded:', typeof solanaWeb3);
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+      checkPhantomAndConnect();
+    });
+    
+    async function checkPhantomAndConnect() {
+      const statusEl = document.getElementById('status');
+      const signBtn = document.getElementById('signBtn');
+      
+      const phantom = window.phantom?.solana || window.solana;
+      
+      if (!phantom || !phantom.isPhantom) {
+        statusEl.className = 'status error';
+        statusEl.innerHTML = '❌ Phantom wallet not found. Please install Phantom.';
+        return;
+      }
+      
+      provider = phantom;
+      console.log('Phantom found:', provider);
+      
+      try {
+        // Connect if not connected
+        if (!provider.isConnected) {
+          statusEl.innerHTML = '<span class="spinner" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 8px;"></span> Please approve connection in Phantom...';
+          await provider.connect();
+        }
+        
+        const connectedPubkey = provider.publicKey.toString();
+        console.log('Connected wallet:', connectedPubkey);
+        
+        // Verify it's the same wallet
+        if (connectedPubkey !== txParams.walletAddress) {
+          statusEl.className = 'status error';
+          statusEl.innerHTML = `❌ Wrong wallet connected!<br>Expected: ${txParams.walletAddress.slice(0,8)}...<br>Got: ${connectedPubkey.slice(0,8)}...`;
+          return;
+        }
+        
+        statusEl.className = 'status success';
+        statusEl.innerHTML = '✅ Wallet connected! Click below to sign the transaction.';
+        signBtn.classList.remove('hidden');
+        
+      } catch (error) {
+        console.error('Connection error:', error);
+        statusEl.className = 'status error';
+        statusEl.innerHTML = '❌ Connection failed: ' + (error.message || 'Unknown error');
+      }
+    }
+    
+    async function signTransaction() {
+      const statusEl = document.getElementById('status');
+      const signBtn = document.getElementById('signBtn');
+      
+      if (!provider || !provider.isConnected) {
+        statusEl.className = 'status error';
+        statusEl.innerHTML = '❌ Wallet not connected';
+        return;
+      }
+      
+      try {
+        signBtn.disabled = true;
+        signBtn.innerHTML = '<span class="spinner"></span> Signing...';
+        
+        statusEl.className = 'status pending';
+        statusEl.innerHTML = '<span class="spinner" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 8px;"></span> Creating on-chain subscription...';
+        
+        console.log('Creating on-chain subscription transaction...');
+        
+        // Create connection to devnet
+        const Connection = solanaWeb3.Connection;
+        const PublicKey = solanaWeb3.PublicKey;
+        const Transaction = solanaWeb3.Transaction;
+        const TransactionInstruction = solanaWeb3.TransactionInstruction;
+        const SystemProgram = solanaWeb3.SystemProgram;
+        
+        const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
+        console.log('Connected to devnet');
+        
+        const PROGRAM_ID = new PublicKey('EYDWvx95gq6GhniDGHMHbn6DsigFhcWGHvHgbbxzuqQq');
+        const userPubkey = provider.publicKey;
+        
+        // Generate discriminator for create_subscription
+        // In browser, we use SubtleCrypto
+        const encoder = new TextEncoder();
+        const preimage = 'global:create_subscription';
+        const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(preimage));
+        const discriminator = new Uint8Array(hashBuffer).slice(0, 8);
+        
+        console.log('Discriminator:', Array.from(discriminator));
+        
+        // Derive subscription PDA
+        const SUBSCRIPTION_SEED = encoder.encode('subscription');
+        const [subscriptionPda, bump] = PublicKey.findProgramAddressSync(
+          [SUBSCRIPTION_SEED, userPubkey.toBuffer()],
+          PROGRAM_ID
+        );
+        
+        console.log('User:', userPubkey.toString());
+        console.log('Subscription PDA:', subscriptionPda.toString());
+        
+        // Determine plan enum value
+        // Weekly = 0, Monthly = 1, Yearly = 2
+        let planValue = 1; // Default to Monthly
+        if (txParams.plan.toLowerCase() === 'weekly') planValue = 0;
+        else if (txParams.plan.toLowerCase() === 'monthly') planValue = 1;
+        else if (txParams.plan.toLowerCase() === 'yearly') planValue = 2;
+        
+        console.log('Plan:', txParams.plan, '-> enum value:', planValue);
+        
+        // Build instruction data: discriminator (8) + plan enum (1)
+        const data = new Uint8Array(9);
+        data.set(discriminator, 0);
+        data[8] = planValue;
+        
+        // Create the create_subscription instruction
+        const instruction = new TransactionInstruction({
+          keys: [
+            { pubkey: userPubkey, isSigner: true, isWritable: true },              // user (payer)
+            { pubkey: subscriptionPda, isSigner: false, isWritable: true },        // subscription
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // system_program
+          ],
+          programId: PROGRAM_ID,
+          data: Buffer.from(data),
+        });
+        
+        const transaction = new Transaction().add(instruction);
+        
+        // Get recent blockhash
+        const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = userPubkey;
+        
+        // Sign and send via Phantom
+        const { signature } = await provider.signAndSendTransaction(transaction);
+        
+        console.log('Transaction signature:', signature);
+        
+        // Wait for confirmation
+        statusEl.innerHTML = '<span class="spinner" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 8px;"></span> Confirming transaction...';
+        
+        await connection.confirmTransaction(signature, 'confirmed');
+        
+        statusEl.className = 'status success';
+        statusEl.innerHTML = '✅ Transaction confirmed!';
+        
+        signBtn.classList.add('hidden');
+        
+        // Send result back to Electron app
+        setTimeout(() => {
+          const callbackUrl = `http://localhost:8765/transaction-callback?` + 
+            `success=true&` +
+            `signature=${encodeURIComponent(signature)}&` +
+            `plan=${encodeURIComponent(txParams.plan)}&` +
+            `priceSOL=${txParams.priceSOL}&` +
+            `durationDays=${txParams.durationDays}`;
+          window.location.href = callbackUrl;
+        }, 1500);
+        
+      } catch (error) {
+        console.error('Transaction error:', error);
+        console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+        
+        statusEl.className = 'status error';
+        
+        const errorMsg = error.message || error.toString() || 'Unknown error';
+        
+        if (error.code === 4001 || errorMsg.includes('rejected') || errorMsg.includes('User rejected')) {
+          statusEl.innerHTML = '❌ Transaction rejected by user';
+        } else if (errorMsg.includes('insufficient') || errorMsg.includes('Insufficient')) {
+          statusEl.innerHTML = '❌ Insufficient balance. Please add SOL to your wallet.';
+        } else if (errorMsg.includes('blockhash')) {
+          statusEl.innerHTML = '❌ Network error. Please try again.';
+        } else {
+          statusEl.innerHTML = '❌ Transaction failed: ' + errorMsg;
+        }
+        
+        signBtn.disabled = false;
+        signBtn.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="currentColor" style="width:24px;height:24px">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+          </svg>
+          Try Again
+        `;
+      }
+    }
+    
+    function cancelTransaction() {
+      // Notify cancellation to Electron
+      const callbackUrl = `http://localhost:8765/transaction-callback?success=false&error=cancelled`;
+      window.location.href = callbackUrl;
+    }
+  </script>
+</body>
+</html>

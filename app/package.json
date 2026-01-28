@@ -8,7 +8,8 @@
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux"
+    "build:linux": "electron-builder --linux",
+    "build:icons": "electron-icon-builder --input=./assets/icon.png --output=./assets --flatten"
   },
   "keywords": [
     "vpn",
@@ -19,25 +20,71 @@
   "author": "DVPN Team",
   "license": "MIT",
   "dependencies": {
+    "@coral-xyz/anchor": "^0.28.0",
+    "@helia/unixfs": "^1.4.3",
+    "@solana/web3.js": "^1.98.4",
     "axios": "^1.6.0",
-    "@solana/web3.js": "^1.87.0",
-    "@coral-xyz/anchor": "^0.28.0"
+    "bs58": "^5.0.0",
+    "helia": "^2.1.0",
+    "ipfs-core": "^0.18.1",
+    "tweetnacl": "^1.0.3",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "electron": "^28.0.0",
-    "electron-builder": "^24.9.1"
+    "electron-builder": "^24.9.1",
+    "electron-icon-builder": "^2.0.1"
   },
   "build": {
     "appId": "com.dvpn.client",
     "productName": "DVPN Client",
+    "icon": "assets/icons/icon",
+    "protocols": {
+      "name": "DVPN Protocol",
+      "schemes": [
+        "dvpn"
+      ]
+    },
     "files": [
-      "**/*"
+      "**/*",
+      "!assets/icons/*.png"
     ],
     "mac": {
-      "category": "public.app-category.utilities"
+      "category": "public.app-category.utilities",
+      "icon": "assets/icons/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icons/icon.ico",
+      "publisherName": "DVPN Team"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DVPN Client",
+      "uninstallDisplayName": "DVPN Client",
+      "deleteAppDataOnUninstall": true
     },
     "linux": {
-      "category": "Network"
+      "category": "Network",
+      "icon": "assets/icons",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
     }
   }
 }

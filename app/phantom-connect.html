@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connect Phantom Wallet - DVPN</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+    }
+    
+    .container {
+      text-align: center;
+      padding: 40px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      max-width: 450px;
+      width: 90%;
+    }
+    
+    .logo {
+      width: 80px;
+      height: 80px;
+      margin-bottom: 20px;
+    }
+    
+    h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+      color: #fff;
+    }
+    
+    .subtitle {
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    
+    .status {
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    
+    .status.detecting {
+      background: rgba(255, 193, 7, 0.2);
+      border: 1px solid rgba(255, 193, 7, 0.5);
+      color: #ffc107;
+    }
+    
+    .status.ready {
+      background: rgba(76, 175, 80, 0.2);
+      border: 1px solid rgba(76, 175, 80, 0.5);
+      color: #4caf50;
+    }
+    
+    .status.error {
+      background: rgba(244, 67, 54, 0.2);
+      border: 1px solid rgba(244, 67, 54, 0.5);
+      color: #f44336;
+    }
+    
+    .status.success {
+      background: rgba(76, 175, 80, 0.2);
+      border: 1px solid rgba(76, 175, 80, 0.5);
+      color: #4caf50;
+    }
+    
+    .connect-btn {
+      background: linear-gradient(135deg, #9945FF 0%, #14F195 100%);
+      color: white;
+      border: none;
+      padding: 15px 40px;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .connect-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(153, 69, 255, 0.4);
+    }
+    
+    .connect-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .connect-btn svg {
+      width: 24px;
+      height: 24px;
+    }
+    
+    .wallet-info {
+      margin-top: 20px;
+      padding: 15px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 10px;
+      word-break: break-all;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    
+    .instructions {
+      margin-top: 20px;
+      padding: 15px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      text-align: left;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.8);
+    }
+    
+    .instructions ol {
+      margin-left: 20px;
+      line-height: 1.8;
+    }
+    
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .hidden {
+      display: none;
+    }
+    
+    a {
+      color: #14F195;
+      text-decoration: none;
+    }
+    
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <svg class="logo" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="128" height="128" rx="26" fill="url(#paint0_linear)"/>
+      <path d="M110.584 64.9142H99.142C99.142 41.7651 80.173 23 56.7724 23C33.6612 23 14.8716 41.3057 14.4169 64.0583C13.9504 87.3664 34.2416 107 57.7533 107H61.6562C82.4561 107 102.282 91.7351 109.716 71.6952C110.337 69.9767 110.584 68.0981 110.584 66.1473V64.9142Z" fill="url(#paint1_linear)"/>
+      <path d="M77.064 64.7487C77.064 69.4706 73.2148 73.2974 68.4656 73.2974C63.7163 73.2974 59.8672 69.4706 59.8672 64.7487C59.8672 60.0268 63.7163 56.2 68.4656 56.2C73.2148 56.2 77.064 60.0268 77.064 64.7487Z" fill="#fff"/>
+      <path d="M53.6896 64.7487C53.6896 69.4706 49.8404 73.2974 45.0912 73.2974C40.3419 73.2974 36.4928 69.4706 36.4928 64.7487C36.4928 60.0268 40.3419 56.2 45.0912 56.2C49.8404 56.2 53.6896 60.0268 53.6896 64.7487Z" fill="#fff"/>
+      <defs>
+        <linearGradient id="paint0_linear" x1="64" y1="0" x2="64" y2="128" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#534BB1"/>
+          <stop offset="1" stop-color="#551BF9"/>
+        </linearGradient>
+        <linearGradient id="paint1_linear" x1="62.5" y1="23" x2="62.5" y2="107" gradientUnits="userSpaceOnUse">
+          <stop stop-color="white"/>
+          <stop offset="1" stop-color="#F3F3F3"/>
+        </linearGradient>
+      </defs>
+    </svg>
+    
+    <h1>Connect to DVPN</h1>
+    <p class="subtitle">Securely connect your Phantom wallet</p>
+    
+    <div id="status" class="status detecting">
+      <span class="spinner"></span> Detecting Phantom wallet...
+    </div>
+    
+    <button id="connectBtn" class="connect-btn hidden" onclick="connectWallet()">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path d="M21 18v1c0 1.1-.9 2-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14c1.1 0 2 .9 2 2v1h-9a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+      </svg>
+      Connect Phantom
+    </button>
+    
+    <div id="installPrompt" class="hidden">
+      <p style="margin-bottom: 15px;">Phantom wallet not detected.</p>
+      <a href="https://phantom.app/download" target="_blank" class="connect-btn" style="text-decoration: none;">
+        Download Phantom
+      </a>
+    </div>
+    
+    <div id="walletInfo" class="wallet-info hidden"></div>
+    
+    <div class="instructions">
+      <ol>
+        <li>Make sure Phantom extension is installed</li>
+        <li>Click "Connect Phantom" button above</li>
+        <li>Approve the connection in Phantom popup</li>
+        <li>You'll be redirected back to the DVPN app</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    let provider = null;
+    
+    // Check for Phantom on page load
+    window.addEventListener('load', async () => {
+      // Wait a bit for Phantom to inject
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      checkPhantom();
+    });
+    
+    function checkPhantom() {
+      const statusEl = document.getElementById('status');
+      const connectBtn = document.getElementById('connectBtn');
+      const installPrompt = document.getElementById('installPrompt');
+      
+      // Check multiple possible locations for Phantom Solana provider
+      const phantom = window.phantom?.solana || window.solana;
+      
+      // Also check if Phantom exists but on wrong network
+      const phantomExists = window.phantom || window.solana;
+      
+      if (phantom && phantom.isPhantom) {
+        provider = phantom;
+        
+        statusEl.className = 'status ready';
+        statusEl.innerHTML = '✅ Phantom wallet detected! Click Connect below.';
+        connectBtn.classList.remove('hidden');
+        installPrompt.classList.add('hidden');
+        
+        // Check if already connected
+        if (provider.isConnected && provider.publicKey) {
+          handleConnected(provider.publicKey.toString());
+        }
+      } else if (phantomExists) {
+        // Phantom is installed but Solana not available (might be on Ethereum)
+        statusEl.className = 'status error';
+        statusEl.innerHTML = '⚠️ Switch Phantom to <strong>Solana</strong> network, then refresh this page.';
+        connectBtn.classList.add('hidden');
+        installPrompt.classList.add('hidden');
+      } else {
+        statusEl.className = 'status error';
+        statusEl.innerHTML = '❌ Phantom wallet not found';
+        connectBtn.classList.add('hidden');
+        installPrompt.classList.remove('hidden');
+      }
+    }
+    
+    async function connectWallet() {
+      const statusEl = document.getElementById('status');
+      const connectBtn = document.getElementById('connectBtn');
+      
+      if (!provider) {
+        statusEl.className = 'status error';
+        statusEl.innerHTML = '❌ Phantom not available';
+        return;
+      }
+      
+      try {
+        connectBtn.disabled = true;
+        connectBtn.innerHTML = '<span class="spinner"></span> Connecting...';
+        
+        statusEl.className = 'status detecting';
+        statusEl.innerHTML = '<span class="spinner"></span> Waiting for Phantom approval...';
+        
+        console.log('Attempting to connect to Phantom...');
+        
+        let publicKey;
+        
+        // Try eager connect first (if already trusted)
+        try {
+          const eagerResponse = await provider.connect({ onlyIfTrusted: true });
+          publicKey = eagerResponse.publicKey.toString();
+          console.log('Eager connect succeeded:', publicKey);
+        } catch (eagerErr) {
+          console.log('Eager connect failed, trying regular connect...');
+          
+          // Regular connect - this should open Phantom popup
+          const response = await provider.connect();
+          publicKey = response.publicKey.toString();
+          console.log('Regular connect succeeded:', publicKey);
+        }
+        
+        handleConnected(publicKey);
+        
+      } catch (error) {
+        console.error('Connection error:', error);
+        
+        statusEl.className = 'status error';
+        
+        const errorMsg = error.message || String(error);
+        
+        if (error.code === 4001 || errorMsg.includes('rejected')) {
+          statusEl.innerHTML = '❌ Connection rejected by user';
+        } else if (errorMsg.includes('locked')) {
+          statusEl.innerHTML = '❌ Please unlock your Phantom wallet first';
+        } else if (errorMsg.includes('Unexpected') || errorMsg.includes('Internal')) {
+          // Phantom bug - suggest workaround
+          statusEl.innerHTML = `
+            ❌ Phantom internal error.<br><br>
+            <strong>Fix:</strong> Click the Phantom extension icon → Lock wallet → Unlock → Refresh this page
+          `;
+        } else {
+          statusEl.innerHTML = '❌ Error: ' + errorMsg;
+        }
+        
+        connectBtn.disabled = false;
+        connectBtn.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="currentColor" style="width:24px;height:24px">
+            <path d="M21 18v1c0 1.1-.9 2-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14c1.1 0 2 .9 2 2v1h-9a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+          </svg>
+          Try Again
+        `;
+      }
+    }
+    
+    function handleConnected(publicKey) {
+      const statusEl = document.getElementById('status');
+      const connectBtn = document.getElementById('connectBtn');
+      const walletInfo = document.getElementById('walletInfo');
+      
+      statusEl.className = 'status success';
+      statusEl.innerHTML = '✅ Wallet connected successfully!';
+      
+      connectBtn.classList.add('hidden');
+      
+      walletInfo.classList.remove('hidden');
+      walletInfo.innerHTML = `
+        <strong>Connected Wallet:</strong><br>
+        ${publicKey}
+      `;
+      
+      // Send back to Electron app via HTTP callback (works in dev mode)
+      setTimeout(() => {
+        statusEl.innerHTML = '✅ Sending to DVPN app...';
+        
+        // Use HTTP callback instead of custom protocol
+        const callbackUrl = `http://localhost:8765/wallet-callback?publicKey=${encodeURIComponent(publicKey)}`;
+        window.location.href = callbackUrl;
+      }, 1000);
+    }
+    
+    // Listen for disconnect
+    const phantomProvider = window.phantom?.solana || window.solana;
+    if (phantomProvider) {
+      phantomProvider.on('disconnect', () => {
+        const statusEl = document.getElementById('status');
+        statusEl.className = 'status error';
+        statusEl.innerHTML = '❌ Wallet disconnected';
+        
+        document.getElementById('connectBtn').classList.remove('hidden');
+        document.getElementById('walletInfo').classList.add('hidden');
+      });
+    }
+  </script>
+</body>
+</html>

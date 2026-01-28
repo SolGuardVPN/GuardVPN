@@ -28,6 +28,7 @@ async function indexProviders() {
       reputation_score: acc.account.reputationScore,
       total_uptime_seconds: acc.account.totalUptimeSeconds.toString(),
       total_sessions: acc.account.totalSessions.toString(),
+      total_earnings: acc.account.totalEarnings ? acc.account.totalEarnings.toString() : '0',
     });
   }
   
@@ -50,6 +51,7 @@ async function indexNodes() {
       max_capacity: acc.account.maxCapacity,
       active_sessions: acc.account.activeSessions,
       total_uptime_seconds: acc.account.totalUptimeSeconds.toString(),
+      total_earnings: acc.account.totalEarnings ? acc.account.totalEarnings.toString() : '0',
       is_active: acc.account.isActive,
     });
   }

@@ -1,0 +1,55 @@
+{
+  "withdrawals": [
+    {
+      "id": "withdrawal_1769072885361_ybbtfr9vi",
+      "wallet": "ahrWpmnbSqY1zrYKDWz1am6f2vgKgxDJrr1bdmx3KH6",
+      "amount": 100000,
+      "amount_sol": "0.000100",
+      "status": "completed",
+      "created_at": "2026-01-22T09:08:05.361Z",
+      "completed_at": "2026-01-22T09:08:07.363Z",
+      "tx_signature": "simulated_1769072887363"
+    },
+    {
+      "id": "withdrawal_1769073402836_xpz6f19d7",
+      "wallet": "ahrWpmnbSqY1zrYKDWz1am6f2vgKgxDJrr1bdmx3KH6",
+      "amount": 100000,
+      "amount_sol": "0.000100",
+      "status": "completed",
+      "created_at": "2026-01-22T09:16:42.836Z",
+      "completed_at": "2026-01-22T09:16:44.838Z",
+      "tx_signature": "simulated_1769073404838"
+    },
+    {
+      "id": "withdrawal_1769078524668_ep9ypkd0y",
+      "wallet": "ahrWpmnbSqY1zrYKDWz1am6f2vgKgxDJrr1bdmx3KH6",
+      "amount": 200000,
+      "amount_sol": "0.000200",
+      "status": "completed",
+      "created_at": "2026-01-22T10:42:04.668Z",
+      "completed_at": "2026-01-22T10:42:06.671Z",
+      "tx_signature": "simulated_1769078526671"
+    },
+    {
+      "id": "withdrawal_1769081112142_4fbitnulw",
+      "wallet": "ahrWpmnbSqY1zrYKDWz1am6f2vgKgxDJrr1bdmx3KH6",
+      "amount": 700000,
+      "amount_sol": "0.000700",
+      "status": "completed",
+      "created_at": "2026-01-22T11:25:12.142Z",
+      "completed_at": "2026-01-22T11:25:14.145Z",
+      "tx_signature": "simulated_1769081114145"
+    },
+    {
+      "id": "withdrawal_1769083472095_pbxct3qsu",
+      "wallet": "ahrWpmnbSqY1zrYKDWz1am6f2vgKgxDJrr1bdmx3KH6",
+      "amount": 100000,
+      "amount_sol": "0.000100",
+      "status": "completed",
+      "created_at": "2026-01-22T12:04:32.095Z",
+      "completed_at": "2026-01-22T12:04:34.098Z",
+      "tx_signature": "simulated_1769083474098"
+    }
+  ],
+  "updated_at": "2026-01-22T12:04:34.098Z"
+}

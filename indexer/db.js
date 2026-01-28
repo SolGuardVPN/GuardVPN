@@ -21,6 +21,7 @@ async function initDatabase() {
         reputation_score INTEGER NOT NULL DEFAULT 1000,
         total_uptime_seconds BIGINT NOT NULL DEFAULT 0,
         total_sessions BIGINT NOT NULL DEFAULT 0,
+        total_earnings BIGINT NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       );
@@ -38,6 +39,7 @@ async function initDatabase() {
         max_capacity INTEGER NOT NULL,
         active_sessions INTEGER NOT NULL DEFAULT 0,
         total_uptime_seconds BIGINT NOT NULL DEFAULT 0,
+        total_earnings BIGINT NOT NULL DEFAULT 0,
         is_active BOOLEAN NOT NULL DEFAULT true,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW(),
@@ -84,10 +86,10 @@ async function initDatabase() {
 }
 
 async function upsertProvider(data) {
-  const { pubkey, authority, node_count, stake_lamports, reputation_score, total_uptime_seconds, total_sessions } = data;
+  const { pubkey, authority, node_count, stake_lamports, reputation_score, total_uptime_seconds, total_sessions, total_earnings } = data;
   await pool.query(`
-    INSERT INTO providers (pubkey, authority, node_count, stake_lamports, reputation_score, total_uptime_seconds, total_sessions, updated_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+    INSERT INTO providers (pubkey, authority, node_count, stake_lamports, reputation_score, total_uptime_seconds, total_sessions, total_earnings, updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
     ON CONFLICT (pubkey) DO UPDATE SET
       authority = EXCLUDED.authority,
       node_count = EXCLUDED.node_count,
@@ -95,17 +97,18 @@ async function upsertProvider(data) {
       reputation_score = EXCLUDED.reputation_score,
       total_uptime_seconds = EXCLUDED.total_uptime_seconds,
       total_sessions = EXCLUDED.total_sessions,
+      total_earnings = EXCLUDED.total_earnings,
       updated_at = NOW()
-  `, [pubkey, authority, node_count, stake_lamports, reputation_score, total_uptime_seconds, total_sessions]);
+  `, [pubkey, authority, node_count, stake_lamports, reputation_score, total_uptime_seconds, total_sessions, total_earnings || 0]);
 }
 
 async function upsertNode(data) {
   const { pubkey, provider, node_id, endpoint, region, price_per_minute_lamports, 
-          wg_server_pubkey, max_capacity, active_sessions, total_uptime_seconds, is_active } = data;
+          wg_server_pubkey, max_capacity, active_sessions, total_uptime_seconds, total_earnings, is_active } = data;
   await pool.query(`
     INSERT INTO nodes (pubkey, provider, node_id, endpoint, region, price_per_minute_lamports,
-                      wg_server_pubkey, max_capacity, active_sessions, total_uptime_seconds, is_active, updated_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+                      wg_server_pubkey, max_capacity, active_sessions, total_uptime_seconds, total_earnings, is_active, updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
     ON CONFLICT (pubkey) DO UPDATE SET
       endpoint = EXCLUDED.endpoint,
       region = EXCLUDED.region,
@@ -113,10 +116,11 @@ async function upsertNode(data) {
       max_capacity = EXCLUDED.max_capacity,
       active_sessions = EXCLUDED.active_sessions,
       total_uptime_seconds = EXCLUDED.total_uptime_seconds,
+      total_earnings = EXCLUDED.total_earnings,
       is_active = EXCLUDED.is_active,
       updated_at = NOW()
   `, [pubkey, provider, node_id, endpoint, region, price_per_minute_lamports, 
-      wg_server_pubkey, max_capacity, active_sessions, total_uptime_seconds, is_active]);
+      wg_server_pubkey, max_capacity, active_sessions, total_uptime_seconds, total_earnings || 0, is_active]);
 }
 
 async function upsertSession(data) {

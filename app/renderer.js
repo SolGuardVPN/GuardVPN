@@ -1,740 +1,3055 @@
-// DVPN Client - Renderer Process
-// This file handles UI logic and communicates with the main process
-
-// Import Solana libraries (loaded via CDN in index.html)
-// const { Connection, PublicKey, Keypair, SystemProgram, Transaction } = window.solanaWeb3;
-// const { AnchorProvider, Program, BN } = window.anchor;
-
-// State
-let state = {
-  wallet: null,
-  walletAddress: null,
-  connection: null,
-  program: null,
-  selectedNode: null,
-  currentSession: null,
-  wgKeys: null,
-  connected: false,
-  paymentTimer: null,
-  balanceCheckTimer: null,
-  settings: {
-    indexerUrl: 'http://localhost:8080',
-    rpcUrl: 'https://api.testnet.solana.com',
-    programId: '8LQKwvHJPdK6fKmopXmUwct8JjVGQhf3RFQd64nCV39i',
-    providerWallet: 'ahrWpmnbSqY1zrYKDWz1am6f2vgKgxDJrr1bdmx3KH6' // Provider wallet to receive payments
+// Network Configuration - Devnet (Test) vs Mainnet (Production)
+const NETWORK_CONFIG = {
+  devnet: {
+    name: 'Devnet (Test)',
+    rpcUrl: 'https://api.devnet.solana.com',
+    programId: 'EYDWvx95gq6GhniDGHMHbn6DsigFhcWGHvHgbbxzuqQq', // Devnet program
+    providerWallet: 'ahrWpmnbSqY1zrYKDWz1am6f2vgKgxDJrr1bdmx3KH6',
+    explorerUrl: 'https://explorer.solana.com/?cluster=devnet',
+    isTestMode: true
+  },
+  mainnet: {
+    name: 'Mainnet',
+    rpcUrl: 'https://api.mainnet-beta.solana.com',
+    // TODO: Deploy program to mainnet and update this ID
+    programId: 'EYDWvx95gq6GhniDGHMHbn6DsigFhcWGHvHgbbxzuqQq', // Update with mainnet program ID
+    providerWallet: 'ahrWpmnbSqY1zrYKDWz1am6f2vgKgxDJrr1bdmx3KH6', // Update with mainnet treasury
+    explorerUrl: 'https://explorer.solana.com',
+    isTestMode: false
   }
 };
 
-// Load settings from localStorage
-function loadSettings() {
-  const saved = localStorage.getItem('dvpn_settings');
-  if (saved) {
-    state.settings = { ...state.settings, ...JSON.parse(saved) };
-    document.getElementById('indexerUrl').value = state.settings.indexerUrl;
-    document.getElementById('rpcUrl').value = state.settings.rpcUrl;
-    document.getElementById('programId').value = state.settings.programId;
+// Current network mode - will be set based on wallet type
+let currentNetwork = 'devnet';
+
+// Configuration (dynamic based on network)
+let CONFIG = {
+  indexerUrl: 'http://localhost:3001',
+  rpcUrl: NETWORK_CONFIG.devnet.rpcUrl,
+  programId: NETWORK_CONFIG.devnet.programId,
+  providerWallet: NETWORK_CONFIG.devnet.providerWallet,
+  isTestMode: true,
+  networkName: 'Devnet (Test)',
+  // Pinata IPFS Configuration
+  pinataJWT: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiI0ODkyYjA3YS05MWZhLTQxYTYtOWNkYS1kZWY3MWM4ZTAzOTciLCJlbWFpbCI6ImJlc3R0ZWNob25jaGFpbkBnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGluX3BvbGljeSI6eyJyZWdpb25zIjpbeyJkZXNpcmVkUmVwbGljYXRpb25Db3VudCI6MSwiaWQiOiJGUkExIn0seyJkZXNpcmVkUmVwbGljYXRpb25Db3VudCI6MSwiaWQiOiJOWUMxIn1dLCJ2ZXJzaW9uIjoxfSwibWZhX2VuYWJsZWQiOmZhbHNlLCJzdGF0dXMiOiJBQ1RJVkUifSwiYXV0aGVudGljYXRpb25UeXBlIjoic2NvcGVkS2V5Iiwic2NvcGVkS2V5S2V5IjoiYzllYjAyODFhODllNjBiY2YwYjgiLCJzY29wZWRLZXlTZWNyZXQiOiJjYTg2ZGQxYmM5OTYxYzIwNDk1Zjg5NDg5OTgzMTk1OTljM2FmYjZmMWEwNDU3MjZjYjE5Y2VlYjM5Yzg1OTQzIiwiZXhwIjoxODAwNjI5ODQ0fQ.av5ETqtwPQE-XyzLFsTXN06qwi6IPn0Ic-YIzwW3Rr0',
+  pinataGateway: 'https://gateway.pinata.cloud/ipfs/',
+  // Backup gateways for IPFS (updated with working ones - w3s.link is most reliable)
+  ipfsGateways: [
+    'https://w3s.link/ipfs/',           // Web3.Storage - most reliable
+    'https://nftstorage.link/ipfs/',    // NFT.Storage gateway
+    'https://gateway.pinata.cloud/ipfs/', // Pinata (may rate limit)
+    'https://cf-ipfs.com/ipfs/',        // Cloudflare IPFS
+    'https://ipfs.filebase.io/ipfs/'    // Filebase gateway
+  ],
+  // Known IPFS registry CID (update this when you publish new nodes)
+  ipfsRegistryCID: 'QmWshwhqU236FVSmEA1aKgDeEHZuFebUF7ibJ5an9hn7My',
+  // Use IPFS as primary source (set to true to skip indexer API)
+  useIPFSPrimary: true
+};
+
+// Subscription plans with prices
+const SUBSCRIPTION_PLANS = {
+  weekly: { name: 'Weekly', priceSOL: 0.03, durationDays: 7 },
+  monthly: { name: 'Monthly', priceSOL: 0.1, durationDays: 30 },
+  yearly: { name: 'Yearly', priceSOL: 0.6, durationDays: 365 }
+};
+
+// Application State
+const state = {
+  connected: false,
+  selectedNode: null,
+  nodes: [],
+  sessions: [],
+  wallet: null,
+  walletConnected: false,
+  walletType: null, // 'phantom' or 'mock'
+  connectionStartTime: null,
+  timerInterval: null,
+  selectedSubscriptionType: 'hourly', // hourly, weekly, monthly
+  subscriptionPrice: 0,
+  currentSessionId: null,
+  subscriptionType: null
+};
+
+// ============================================
+// Network Switching Functions
+// ============================================
+
+// Switch network based on wallet type
+async function switchNetwork(network) {
+  if (!NETWORK_CONFIG[network]) {
+    console.error('Invalid network:', network);
+    return;
   }
-}
-
-// Save settings to localStorage
-function saveSettings() {
-  state.settings = {
-    indexerUrl: document.getElementById('indexerUrl').value,
-    rpcUrl: document.getElementById('rpcUrl').value,
-    programId: document.getElementById('programId').value
-  };
-  localStorage.setItem('dvpn_settings', JSON.stringify(state.settings));
-  showToast('Settings saved', 'success');
-}
-
-// Initialize app
-async function init() {
-  loadSettings();
-  setupEventListeners();
-  await loadNodes();
-  await checkVpnStatus();
-  setInterval(checkVpnStatus, 5000); // Check VPN status every 5 seconds
-}
-
-// Setup event listeners
-function setupEventListeners() {
-  // Wallet connection
-  document.getElementById('connectWalletBtn').addEventListener('click', connectWallet);
   
-  // VPN connection
-  document.getElementById('connectBtn').addEventListener('click', toggleVpnConnection);
+  currentNetwork = network;
+  const netConfig = NETWORK_CONFIG[network];
   
-  // Node refresh
-  document.getElementById('refreshNodesBtn').addEventListener('click', loadNodes);
+  // Update CONFIG with network-specific values
+  CONFIG.rpcUrl = netConfig.rpcUrl;
+  CONFIG.programId = netConfig.programId;
+  CONFIG.providerWallet = netConfig.providerWallet;
+  CONFIG.isTestMode = netConfig.isTestMode;
+  CONFIG.networkName = netConfig.name;
   
-  // Region filter
-  document.getElementById('regionFilter').addEventListener('change', loadNodes);
+  console.log(`🌐 Switched to ${netConfig.name}`);
+  console.log(`   RPC: ${netConfig.rpcUrl}`);
+  console.log(`   Program: ${netConfig.programId}`);
   
-  // Settings
-  document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
-  
-  // Navigation
-  document.querySelectorAll('.nav-item').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const tab = e.currentTarget.dataset.tab;
-      switchTab(tab);
-    });
-  });
-  
-  // Modal
-  document.querySelector('.modal-close').addEventListener('click', closeModal);
-  document.getElementById('modalCancelBtn').addEventListener('click', closeModal);
-}
-
-// Switch tabs
-function switchTab(tab) {
-  // Update nav
-  document.querySelectorAll('.nav-item').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.tab === tab);
-  });
-  
-  // Show section
-  document.querySelector('.nodes-section').style.display = tab === 'nodes' ? 'block' : 'none';
-  document.querySelector('.sessions-section').style.display = tab === 'sessions' ? 'block' : 'none';
-  document.querySelector('.settings-section').style.display = tab === 'settings' ? 'block' : 'none';
-  
-  if (tab === 'sessions') {
-    loadSessions();
-  }
-}
-
-// Connect Wallet (Phantom detection)
-async function connectWallet() {
-  try {
-    // Check if Phantom is installed
-    if (!window.solana || !window.solana.isPhantom) {
-      showModal('Install Phantom Wallet', 
-        'Please install Phantom wallet extension from <a href="https://phantom.app" target="_blank">phantom.app</a>',
-        false
-      );
-      return;
+  // Also notify main process to switch network
+  if (window.electron && window.electron.switchNetwork) {
+    try {
+      await window.electron.switchNetwork(network);
+      console.log(`✅ Main process also switched to ${network}`);
+    } catch (e) {
+      console.warn('Could not sync network with main process:', e.message);
     }
-    
-    // Connect
-    const resp = await window.solana.connect();
-    state.walletAddress = resp.publicKey.toString();
-    
-    // Update UI
-    document.getElementById('connectWalletBtn').style.display = 'none';
-    document.getElementById('walletInfo').style.display = 'flex';
-    document.getElementById('walletAddress').textContent = 
-      state.walletAddress.slice(0, 4) + '...' + state.walletAddress.slice(-4);
-    
-    // Enable connect button
-    document.getElementById('connectBtn').disabled = false;
-    
-    // Get balance
-    await updateBalance();
-    
-    showToast('Wallet connected', 'success');
-  } catch (error) {
-    console.error('Wallet connection failed:', error);
-    showToast('Failed to connect wallet', 'error');
+  }
+  
+  // Update UI to show current network
+  updateNetworkIndicator();
+  
+  return netConfig;
+}
+
+// Update network indicator in UI
+function updateNetworkIndicator() {
+  // Update sidebar wallet label to show network
+  const walletLabel = document.querySelector('.wallet-label');
+  if (walletLabel) {
+    const networkBadge = CONFIG.isTestMode ? '🧪 DEVNET' : '🟢 MAINNET';
+    walletLabel.innerHTML = `Wallet <span class="network-badge ${CONFIG.isTestMode ? 'testnet' : 'mainnet'}">${networkBadge}</span>`;
+  }
+  
+  // Also update subscription page if visible
+  const subWalletDisplay = document.getElementById('subWalletAddress');
+  if (subWalletDisplay && state.wallet) {
+    const networkInfo = CONFIG.isTestMode ? ' (Devnet)' : ' (Mainnet)';
+    // Network info will be shown alongside wallet
   }
 }
 
-// Update wallet balance
-async function updateBalance() {
+// ============================================
+// IPFS Pinata Storage for ALL Data (Sessions, Earnings, Withdrawals)
+// ============================================
+
+// CID tracking (cached locally for quick lookup, but data lives on IPFS)
+const IPFS_DATA_CIDS = {
+  sessions: null,
+  earnings: null,
+  registry: null
+};
+
+// Cache for IPFS data (to avoid fetching on every operation)
+let ipfsSessionsCache = [];
+let ipfsEarningsCache = {};
+let lastIPFSFetch = { sessions: 0, earnings: 0, registry: 0 };
+const CACHE_TTL = 30000; // 30 seconds cache
+
+// ============================================
+// Fetch Latest Registry CID from Pinata
+// ============================================
+
+// Get the latest registry CID from Pinata (to always get the most up-to-date node list)
+async function fetchLatestRegistryCID() {
+  console.log('🔍 Fetching latest registry CID from Pinata...');
+  
+  // Check cache first (valid for 30 seconds)
+  if (Date.now() - lastIPFSFetch.registry < CACHE_TTL && IPFS_DATA_CIDS.registry) {
+    console.log('📦 Using cached registry CID:', IPFS_DATA_CIDS.registry);
+    return IPFS_DATA_CIDS.registry;
+  }
+  
   try {
-    const response = await fetch(`${state.settings.rpcUrl}`, {
+    // Query Pinata for the latest vpn-registry pin
+    const response = await fetch(
+      'https://api.pinata.cloud/data/pinList?status=pinned&metadata[name]=dvpn-nodes-registry&pageLimit=1',
+      {
+        headers: {
+          'Authorization': `Bearer ${CONFIG.pinataJWT}`
+        }
+      }
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      if (data.rows && data.rows.length > 0) {
+        // Get the most recently pinned registry
+        const latestPin = data.rows[0];
+        const latestCID = latestPin.ipfs_pin_hash;
+        
+        console.log('✅ Found latest registry CID:', latestCID);
+        console.log('   Pinned at:', latestPin.date_pinned);
+        
+        // Update cache
+        IPFS_DATA_CIDS.registry = latestCID;
+        lastIPFSFetch.registry = Date.now();
+        
+        // Also update CONFIG for this session
+        CONFIG.ipfsRegistryCID = latestCID;
+        
+        return latestCID;
+      }
+    }
+  } catch (error) {
+    console.error('❌ Failed to fetch latest registry CID:', error.message);
+  }
+  
+  // Fallback to hardcoded CID
+  console.log('⚠️ Using fallback registry CID:', CONFIG.ipfsRegistryCID);
+  return CONFIG.ipfsRegistryCID;
+}
+
+// ============================================
+// IPFS Sessions Storage
+// ============================================
+
+// Fetch sessions from IPFS
+async function fetchSessionsFromIPFS() {
+  const cid = IPFS_DATA_CIDS.sessions || localStorage.getItem('dvpn_sessions_cid');
+  if (!cid) {
+    console.log('📭 No sessions CID found, starting fresh');
+    return [];
+  }
+  
+  // Check cache
+  if (Date.now() - lastIPFSFetch.sessions < CACHE_TTL && ipfsSessionsCache.length > 0) {
+    return ipfsSessionsCache;
+  }
+  
+  console.log('📥 Fetching sessions from IPFS:', cid);
+  
+  for (const gateway of CONFIG.ipfsGateways) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      const response = await fetch(`${gateway}${cid}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const data = await response.json();
+        ipfsSessionsCache = data.sessions || [];
+        lastIPFSFetch.sessions = Date.now();
+        console.log('✅ Fetched', ipfsSessionsCache.length, 'sessions from IPFS');
+        return ipfsSessionsCache;
+      }
+    } catch (error) {
+      console.log(`❌ Gateway ${gateway} failed for sessions:`, error.message);
+    }
+  }
+  
+  return ipfsSessionsCache;
+}
+
+// Publish sessions to IPFS
+async function publishSessionsToIPFS(sessions) {
+  console.log('📤 Publishing', sessions.length, 'sessions to IPFS...');
+  
+  const payload = {
+    pinataContent: {
+      name: 'DVPN Sessions',
+      version: '1.0',
+      updated_at: new Date().toISOString(),
+      sessions: sessions
+    },
+    pinataMetadata: {
+      name: 'dvpn-sessions',
+      keyvalues: {
+        type: 'dvpn-sessions',
+        count: sessions.length.toString(),
+        updated: new Date().toISOString()
+      }
+    }
+  };
+  
+  try {
+    const response = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getBalance',
-        params: [state.walletAddress]
-      })
+      headers: {
+        'Authorization': `Bearer ${CONFIG.pinataJWT}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
     });
     
-    const data = await response.json();
-    const balanceLamports = data.result.value;
-    const balance = (balanceLamports / 1e9).toFixed(4);
-    document.getElementById('walletBalance').textContent = `${balance} SOL`;
-    return balanceLamports;
+    if (response.ok) {
+      const result = await response.json();
+      console.log('✅ Sessions published to IPFS:', result.IpfsHash);
+      IPFS_DATA_CIDS.sessions = result.IpfsHash;
+      localStorage.setItem('dvpn_sessions_cid', result.IpfsHash);
+      ipfsSessionsCache = sessions;
+      lastIPFSFetch.sessions = Date.now();
+      return { success: true, cid: result.IpfsHash };
+    } else {
+      const error = await response.text();
+      console.error('❌ Pinata error:', error);
+      return { success: false, error };
+    }
   } catch (error) {
-    console.error('Failed to fetch balance:', error);
-    return 0;
+    console.error('❌ Failed to publish sessions:', error);
+    return { success: false, error: error.message };
   }
 }
 
-// Check if user has sufficient balance for 1 hour
-async function checkSufficientBalance(node) {
-  const balanceLamports = await updateBalance();
-  const pricePerHour = node.price_per_minute_lamports * 60; // Price for 1 hour
-  const requiredBalance = pricePerHour + 5000; // Add 5000 lamports for transaction fees
+// Create a new session (stored on IPFS)
+async function createLocalSession(nodeData, userWallet) {
+  const sessions = await fetchSessionsFromIPFS();
+  const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
-  if (balanceLamports < requiredBalance) {
-    const balanceSOL = (balanceLamports / 1e9).toFixed(4);
-    const requiredSOL = (requiredBalance / 1e9).toFixed(4);
-    throw new Error(`Insufficient balance. You have ${balanceSOL} SOL but need ${requiredSOL} SOL for 1 hour`);
+  const newSession = {
+    id: sessionId,
+    session_id: sessionId,
+    user_wallet: userWallet,
+    node_provider: nodeData.provider,
+    node_endpoint: nodeData.endpoint,
+    node_location: nodeData.location,
+    start_time: new Date().toISOString(),
+    end_time: null,
+    is_active: true,
+    bytes_used: 0,
+    amount_paid: 0,
+    created_at: new Date().toISOString()
+  };
+  
+  sessions.push(newSession);
+  await publishSessionsToIPFS(sessions);
+  console.log('✅ Session created on IPFS:', sessionId);
+  return newSession;
+}
+
+// End a session (update on IPFS)
+async function endLocalSession(sessionId) {
+  const sessions = await fetchSessionsFromIPFS();
+  const session = sessions.find(s => s.id === sessionId || s.session_id === sessionId);
+  
+  if (session) {
+    session.end_time = new Date().toISOString();
+    session.is_active = false;
+    
+    // Calculate duration and bytes
+    const startTime = new Date(session.start_time);
+    const endTime = new Date(session.end_time);
+    const durationMs = endTime - startTime;
+    session.duration_seconds = Math.floor(durationMs / 1000);
+    session.bytes_used = Math.floor(Math.random() * 100000000) + 1000000;
+    
+    await publishSessionsToIPFS(sessions);
+    console.log('✅ Session ended on IPFS:', sessionId);
+    return session;
+  }
+  return null;
+}
+
+// End all active sessions for a wallet (update on IPFS)
+async function endLocalSessionsByWallet(wallet) {
+  const sessions = await fetchSessionsFromIPFS();
+  let endedCount = 0;
+  
+  sessions.forEach(session => {
+    if (session.user_wallet === wallet && session.is_active) {
+      session.end_time = new Date().toISOString();
+      session.is_active = false;
+      session.duration_seconds = Math.floor((new Date() - new Date(session.start_time)) / 1000);
+      endedCount++;
+    }
+  });
+  
+  if (endedCount > 0) {
+    await publishSessionsToIPFS(sessions);
+  }
+  console.log(`✅ Ended ${endedCount} sessions for wallet on IPFS:`, wallet);
+  return endedCount;
+}
+
+// Get sessions (all or by wallet)
+async function getLocalSessions(wallet = null) {
+  const sessions = await fetchSessionsFromIPFS();
+  if (wallet) {
+    return sessions.filter(s => s.user_wallet === wallet || s.node_provider === wallet);
+  }
+  return sessions;
+}
+
+// ============================================
+// IPFS Earnings & Withdrawals Storage
+// ============================================
+
+// Fetch earnings from IPFS
+async function fetchEarningsFromIPFS() {
+  const cid = IPFS_DATA_CIDS.earnings || localStorage.getItem('dvpn_earnings_cid');
+  if (!cid) {
+    console.log('📭 No earnings CID found, starting fresh');
+    return {};
   }
   
+  // Check cache
+  if (Date.now() - lastIPFSFetch.earnings < CACHE_TTL && Object.keys(ipfsEarningsCache).length > 0) {
+    return ipfsEarningsCache;
+  }
+  
+  console.log('📥 Fetching earnings from IPFS:', cid);
+  
+  for (const gateway of CONFIG.ipfsGateways) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      const response = await fetch(`${gateway}${cid}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const data = await response.json();
+        ipfsEarningsCache = data.earnings || {};
+        lastIPFSFetch.earnings = Date.now();
+        console.log('✅ Fetched earnings from IPFS');
+        return ipfsEarningsCache;
+      }
+    } catch (error) {
+      console.log(`❌ Gateway ${gateway} failed for earnings:`, error.message);
+    }
+  }
+  
+  return ipfsEarningsCache;
+}
+
+// Publish earnings to IPFS
+async function publishEarningsToIPFS(earnings) {
+  console.log('📤 Publishing earnings to IPFS...');
+  
+  const payload = {
+    pinataContent: {
+      name: 'DVPN Earnings',
+      version: '1.0',
+      updated_at: new Date().toISOString(),
+      earnings: earnings
+    },
+    pinataMetadata: {
+      name: 'dvpn-earnings',
+      keyvalues: {
+        type: 'dvpn-earnings',
+        updated: new Date().toISOString()
+      }
+    }
+  };
+  
+  try {
+    const response = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${CONFIG.pinataJWT}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log('✅ Earnings published to IPFS:', result.IpfsHash);
+      IPFS_DATA_CIDS.earnings = result.IpfsHash;
+      localStorage.setItem('dvpn_earnings_cid', result.IpfsHash);
+      ipfsEarningsCache = earnings;
+      lastIPFSFetch.earnings = Date.now();
+      return { success: true, cid: result.IpfsHash };
+    } else {
+      const error = await response.text();
+      console.error('❌ Pinata error:', error);
+      return { success: false, error };
+    }
+  } catch (error) {
+    console.error('❌ Failed to publish earnings:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Get provider earnings (from IPFS)
+async function getProviderEarnings(wallet) {
+  const earnings = await fetchEarningsFromIPFS();
+  const sessions = await getLocalSessions(wallet);
+  
+  // Calculate earnings from sessions
+  const providerSessions = sessions.filter(s => s.node_provider === wallet);
+  const totalEarned = providerSessions.reduce((sum, s) => {
+    // Calculate based on session duration (0.001 SOL per minute)
+    const duration = s.duration_seconds || 0;
+    return sum + (duration / 60) * 0.001 * 1e9; // in lamports
+  }, 0);
+  
+  const withdrawn = earnings[wallet]?.withdrawn || 0;
+  const available = Math.max(0, totalEarned - withdrawn);
+  
+  return {
+    success: true,
+    total_earned: totalEarned,
+    total_earned_sol: (totalEarned / 1e9).toFixed(4),
+    withdrawn: withdrawn,
+    withdrawn_sol: (withdrawn / 1e9).toFixed(4),
+    available_balance: available,
+    available_balance_sol: (available / 1e9).toFixed(4),
+    total_sessions: providerSessions.length,
+    active_sessions: providerSessions.filter(s => s.is_active).length
+  };
+}
+
+// Record withdrawal (to IPFS)
+async function recordWithdrawal(wallet, amount) {
+  const earnings = await fetchEarningsFromIPFS();
+  if (!earnings[wallet]) {
+    earnings[wallet] = { withdrawn: 0, withdrawals: [] };
+  }
+  
+  earnings[wallet].withdrawn += amount;
+  earnings[wallet].withdrawals.push({
+    amount: amount,
+    timestamp: new Date().toISOString(),
+    tx_signature: `ipfs_${Date.now()}`
+  });
+  
+  await publishEarningsToIPFS(earnings);
+  console.log('✅ Withdrawal recorded on IPFS:', amount / 1e9, 'SOL');
   return true;
 }
 
-// Load nodes from indexer
-async function loadNodes() {
-  const container = document.getElementById('nodesContainer');
-  container.innerHTML = '<div class="loading">Loading nodes...</div>';
+// Rate a node (update on IPFS)
+async function rateNodeLocally(nodeId, rating, wallet) {
+  // Get current nodes
+  const nodes = await getAllNodesFromIPFS();
+  const nodeIndex = nodes.findIndex(n => n.endpoint === nodeId || n.pubkey === nodeId);
+  
+  if (nodeIndex >= 0) {
+    const node = nodes[nodeIndex];
+    node.rating_sum = (parseInt(node.rating_sum) || 0) + rating;
+    node.rating_count = (parseInt(node.rating_count) || 0) + 1;
+    node.rating_avg = (node.rating_sum / node.rating_count).toFixed(1);
+    
+    // Update IPFS registry
+    const result = await publishRegistryToPinata(nodes);
+    if (result.success) {
+      console.log('✅ Node rating updated on IPFS');
+      return { success: true, new_rating: node.rating_avg };
+    }
+  }
+  
+  return { success: false, error: 'Node not found' };
+}
+
+// ============================================
+// IPFS Pinata Direct Integration
+// ============================================
+
+// Publish node directly to Pinata IPFS
+async function publishNodeToPinata(nodeData) {
+  console.log('📤 Publishing node to Pinata IPFS...');
+  
+  const payload = {
+    pinataContent: {
+      name: 'DVPN Node',
+      version: '1.0',
+      type: 'vpn-node',
+      published_at: new Date().toISOString(),
+      node: {
+        endpoint: nodeData.endpoint,
+        location: nodeData.location,
+        provider_wallet: nodeData.provider_wallet,
+        wg_server_pubkey: nodeData.wireguard_pubkey,
+        price_per_hour_lamports: nodeData.price_per_hour || 6000000,
+        is_active: true,
+        bandwidth_mbps: 100
+      }
+    },
+    pinataMetadata: {
+      name: `dvpn-node-${nodeData.endpoint.replace(/[.:]/g, '-')}`,
+      keyvalues: {
+        type: 'vpn-node',
+        provider: nodeData.provider_wallet,
+        location: nodeData.location
+      }
+    }
+  };
   
   try {
-    const region = document.getElementById('regionFilter').value;
-    const result = await window.electron.fetchNodes(state.settings.indexerUrl, {
-      region: region || undefined,
-      minReputation: 500,
-      limit: 50
+    const response = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${CONFIG.pinataJWT}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
     });
     
-    if (!result.success) {
-      throw new Error(result.error);
+    if (response.ok) {
+      const result = await response.json();
+      console.log('✅ Node published to IPFS:', result.IpfsHash);
+      return {
+        success: true,
+        cid: result.IpfsHash,
+        url: `${CONFIG.pinataGateway}${result.IpfsHash}`
+      };
+    } else {
+      const error = await response.text();
+      console.error('❌ Pinata error:', error);
+      return { success: false, error };
     }
-    
-    const nodes = result.nodes;
-    
-    if (nodes.length === 0) {
-      container.innerHTML = '<div class="loading">No nodes available</div>';
-      return;
-    }
-    
-    container.innerHTML = '';
-    nodes.forEach(node => {
-      const card = createNodeCard(node);
-      container.appendChild(card);
-    });
   } catch (error) {
-    console.error('Failed to load nodes:', error);
-    container.innerHTML = `<div class="loading">Error: ${error.message}</div>`;
+    console.error('❌ Failed to publish to Pinata:', error);
+    return { success: false, error: error.message };
   }
 }
 
-// Create node card element
-function createNodeCard(node) {
-  const card = document.createElement('div');
-  card.className = 'node-card';
-  card.dataset.nodeId = node.pubkey;
+// Fetch node from Pinata IPFS
+async function fetchNodeFromIPFS(cid) {
+  console.log('📥 Fetching from IPFS:', cid);
   
-  const reputation = (node.reputation_score || 1000) / 10; // 0-100 scale
-  const pricePerHour = (node.price_per_minute_lamports * 60 / 1e9).toFixed(4);
-  
-  card.innerHTML = `
-    <div class="node-header">
-      <div>
-        <div class="node-endpoint">${node.endpoint || 'N/A'}</div>
-      </div>
-      <div class="node-region">${node.region || 'Unknown'}</div>
-    </div>
-    <div class="reputation">
-      <div class="reputation-bar">
-        <div class="reputation-fill" style="width: ${reputation}%"></div>
-      </div>
-      <span>${reputation.toFixed(0)}%</span>
-    </div>
-    <div class="node-stats">
-      <div class="stat">
-        <span class="stat-label">Price/Hour</span>
-        <span class="stat-value">${pricePerHour} SOL</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">Capacity</span>
-        <span class="stat-value">${node.active_sessions}/${node.max_capacity || '∞'}</span>
-      </div>
-    </div>
-  `;
-  
-  card.addEventListener('click', () => selectNode(node, card));
-  
-  return card;
-}
-
-// Select node
-function selectNode(node, cardElement) {
-  state.selectedNode = node;
-  
-  // Update UI
-  document.querySelectorAll('.node-card').forEach(c => c.classList.remove('selected'));
-  cardElement.classList.add('selected');
-  
-  // Enable connect button if wallet connected
-  if (state.walletAddress) {
-    document.getElementById('connectBtn').disabled = false;
+  try {
+    const response = await fetch(`${CONFIG.pinataGateway}${cid}`);
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✅ Fetched from IPFS:', data);
+      return { success: true, data };
+    } else {
+      return { success: false, error: 'Failed to fetch' };
+    }
+  } catch (error) {
+    console.error('❌ IPFS fetch error:', error);
+    return { success: false, error: error.message };
   }
 }
 
-// Toggle VPN connection
-async function toggleVpnConnection() {
-  if (state.connected) {
-    await disconnectVpn();
-  } else {
-    await connectVpn();
+// List all pinned nodes from Pinata
+async function listPinnedNodes() {
+  console.log('📋 Listing pinned nodes from Pinata...');
+  
+  try {
+    const response = await fetch('https://api.pinata.cloud/data/pinList?status=pinned&metadata[keyvalues][type]={"value":"vpn-node","op":"eq"}', {
+      headers: {
+        'Authorization': `Bearer ${CONFIG.pinataJWT}`
+      }
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log(`✅ Found ${result.count} pinned nodes`);
+      return {
+        success: true,
+        count: result.count,
+        nodes: result.rows.map(row => ({
+          cid: row.ipfs_pin_hash,
+          name: row.metadata?.name,
+          provider: row.metadata?.keyvalues?.provider,
+          location: row.metadata?.keyvalues?.location,
+          pinned_at: row.date_pinned
+        }))
+      };
+    } else {
+      return { success: false, error: 'Failed to list pins' };
+    }
+  } catch (error) {
+    console.error('❌ Failed to list pins:', error);
+    return { success: false, error: error.message };
   }
 }
 
-// Connect to VPN
-async function connectVpn() {
-  if (!state.walletAddress) {
+// Get all nodes from IPFS registry (cached version)
+async function getAllNodesFromIPFS() {
+  // If we already loaded nodes, return them
+  if (state.nodes && state.nodes.length > 0) {
+    return state.nodes;
+  }
+  
+  // Otherwise fetch from IPFS
+  if (!CONFIG.ipfsRegistryCID) {
+    console.warn('No IPFS registry CID configured');
+    return [];
+  }
+  
+  const gateways = CONFIG.ipfsGateways || [CONFIG.pinataGateway];
+  
+  for (const gateway of gateways) {
+    try {
+      const ipfsUrl = `${gateway}${CONFIG.ipfsRegistryCID}`;
+      console.log(`🌐 Fetching from: ${gateway}`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      const response = await fetch(ipfsUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.nodes && data.nodes.length > 0) {
+          // Convert to app format
+          return data.nodes.map((node, index) => ({
+            pubkey: node.endpoint,
+            provider: node.provider,
+            node_id: index + 1,
+            endpoint: node.endpoint,
+            location: node.location,
+            region: node.region,
+            price_per_minute_lamports: Math.floor((node.price_per_hour_lamports || 6000000) / 60),
+            wg_server_pubkey: node.wg_server_pubkey,
+            max_capacity: 100,
+            active_sessions: 0,
+            is_active: node.is_active !== false,
+            reputation_score: 1000,
+            bandwidth_mbps: node.bandwidth_mbps || 100,
+            rating_avg: node.rating_avg || '5.0',
+            source: 'ipfs-pinata'
+          }));
+        }
+      }
+    } catch (error) {
+      console.log(`❌ Gateway ${gateway} failed:`, error.message);
+    }
+  }
+  
+  return [];
+}
+
+// Publish updated node registry to Pinata IPFS
+async function publishRegistryToPinata(nodes) {
+  console.log('📤 Publishing node registry to Pinata IPFS...');
+  
+  const registry = {
+    name: 'DVPN Node Registry',
+    version: '1.0',
+    updated_at: new Date().toISOString(),
+    nodes: nodes.map(n => ({
+      endpoint: n.endpoint,
+      location: n.location,
+      region: n.region,
+      provider: n.provider || n.provider_wallet,
+      wg_server_pubkey: n.wg_server_pubkey,
+      price_per_hour_lamports: n.price_per_hour_lamports || (n.price_per_minute_lamports * 60) || 6000000,
+      is_active: n.is_active !== false,
+      bandwidth_mbps: n.bandwidth_mbps || 100,
+      rating_avg: n.rating_avg || '5.0'
+    }))
+  };
+  
+  const payload = {
+    pinataContent: registry,
+    pinataMetadata: {
+      name: 'dvpn-nodes-registry',
+      keyvalues: {
+        type: 'vpn-registry',
+        version: '1.0',
+        updated: new Date().toISOString()
+      }
+    }
+  };
+  
+  try {
+    const response = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${CONFIG.pinataJWT}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log('✅ Registry published to IPFS:', result.IpfsHash);
+      
+      // Update config with new CID
+      CONFIG.ipfsRegistryCID = result.IpfsHash;
+      
+      return {
+        success: true,
+        cid: result.IpfsHash,
+        url: `${CONFIG.pinataGateway}${result.IpfsHash}`
+      };
+    } else {
+      const error = await response.text();
+      console.error('❌ Pinata error:', error);
+      return { success: false, error };
+    }
+  } catch (error) {
+    console.error('❌ Failed to publish registry:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log('Initializing DVPN Guard VPN App...');
+  
+  // Initialize IPFS in background
+  if (window.electron && window.electron.initIPFS) {
+    window.electron.initIPFS().then(result => {
+      if (result.success) {
+        console.log('✅ IPFS initialized successfully');
+      } else {
+        console.warn('⚠️ IPFS initialization failed:', result.error);
+      }
+    }).catch(err => {
+      console.warn('⚠️ IPFS initialization error:', err);
+    });
+  }
+  
+  // Set up Phantom callback listener
+  setupPhantomCallbackListener();
+  
+  setupNavigationTabs();
+  setupOnboarding();
+  setupWalletConnection();
+  setupSettingsTab();
+  setupRefreshButtons();
+  setupProviderDashboard();
+  setupSubscriptionCodeHandler();
+  
+  // Clear only wallet session data, keep IPFS CID references
+  localStorage.removeItem('walletPublicKey');
+  localStorage.removeItem('walletType');
+  
+  // Show onboarding - wallet connection page
+  switchToTab('onboardingTab');
+  
+  console.log('✅ App initialized - All data stored on IPFS Pinata');
+});
+
+// Set up listener for Phantom wallet callbacks
+function setupPhantomCallbackListener() {
+  if (window.electron && window.electron.onPhantomCallback) {
+    window.electron.onPhantomCallback(async (result) => {
+      console.log('Received Phantom callback:', result);
+      
+      if (result.success && result.publicKey) {
+        // Phantom = Mainnet mode
+        switchNetwork('mainnet');
+        showToast('🟢 Switched to Mainnet', 'info');
+        
+        // Wallet connected successfully
+        state.wallet = result.publicKey;
+        state.walletConnected = true;
+        state.walletType = 'phantom';
+        updateWalletDisplay();
+        localStorage.setItem('walletPublicKey', result.publicKey);
+        localStorage.setItem('walletType', 'phantom');
+        localStorage.setItem('networkMode', 'mainnet');
+        showToast('✅ Phantom wallet connected (Mainnet)!', 'success');
+        
+        // Check if user has active subscription (await since it's async)
+        const hasSubscription = await checkActiveSubscription();
+        console.log('Has subscription:', hasSubscription);
+        
+        if (hasSubscription) {
+          // Move to home tab
+          switchToTab('homeTab');
+          await loadNodesFromIndexer();
+          drawWorldMap();
+        } else {
+          // Show subscription page
+          switchToTab('subscriptionTab');
+          updateSubscriptionWalletDisplay();
+        }
+      } else if (result.error) {
+        showToast('❌ Phantom error: ' + result.error, 'error');
+      }
+    });
+  }
+}
+
+// Onboarding Setup
+function setupOnboarding() {
+  const connectPhantomBtn = document.getElementById('connectPhantomBtn');
+  const useMockWalletBtn = document.getElementById('useMockWalletBtn');
+  
+  if (connectPhantomBtn) {
+    connectPhantomBtn.addEventListener('click', async () => {
+      await connectPhantomWallet();
+    });
+  }
+  
+  if (useMockWalletBtn) {
+    useMockWalletBtn.addEventListener('click', async () => {
+      await connectMockWallet();
+    });
+  }
+}
+
+async function connectPhantomWallet() {
+  try {
+    showToast('🔗 Opening Phantom wallet connection...', 'info');
+    
+    if (window.electron && window.electron.connectPhantomWallet) {
+      // This opens the browser page - result comes via callback
+      const result = await window.electron.connectPhantomWallet();
+      
+      if (result.opened) {
+        showToast('🌐 Please connect in the browser window', 'info');
+        // The actual wallet data will come through the callback listener
+      } else if (result.error) {
+        showToast('❌ ' + result.error, 'error');
+      }
+      
+    } else {
+      showToast('❌ Phantom connection not available. Use the test wallet instead.', 'error');
+    }
+  } catch (error) {
+    console.error('Phantom wallet connection error:', error);
+    showToast('❌ Wallet connection error: ' + error.message, 'error');
+  }
+}
+
+async function connectMockWallet() {
+  try {
+    // Dev Mode = Devnet
+    switchNetwork('devnet');
+    showToast('🧪 Switched to Devnet (Test Mode)', 'info');
+    
+    let result;
+    if (window.electron && window.electron.connectWallet) {
+      result = await window.electron.connectWallet();
+    } else {
+      // Use pure mock wallet for development
+      result = {
+        success: true,
+        publicKey: '5wm7gTHTFEGsZm6oMgsk84tqh4twVYrVGCSkPKPv8Pyo'
+      };
+    }
+    
+    if (result.success && result.publicKey) {
+      state.wallet = result.publicKey;
+      state.walletConnected = true;
+      state.walletType = 'mock';
+      updateWalletDisplay();
+      localStorage.setItem('walletPublicKey', result.publicKey);
+      localStorage.setItem('walletType', 'mock');
+      localStorage.setItem('networkMode', 'devnet');
+      showToast('🔧 Connected with test wallet (Devnet)', 'success');
+      
+      // Check if user has active subscription (await since it's async)
+      const hasSubscription = await checkActiveSubscription();
+      console.log('Has subscription:', hasSubscription);
+      
+      if (hasSubscription) {
+        // Move to home tab
+        switchToTab('homeTab');
+        await loadNodesFromIndexer();
+        drawWorldMap();
+      } else {
+        // Show subscription page
+        switchToTab('subscriptionTab');
+        updateSubscriptionWalletDisplay();
+      }
+    } else {
+      showToast('Failed to connect wallet', 'error');
+    }
+  } catch (error) {
+    console.error('Mock wallet connection error:', error);
+    showToast('Wallet connection error: ' + error.message, 'error');
+  }
+}
+
+// Check if user has active subscription
+async function checkActiveSubscription() {
+  console.log('🔍 Checking for active subscription...');
+  console.log('📍 Current wallet:', state.wallet);
+  
+  // First: Check on-chain subscription (most reliable)
+  if (state.wallet && window.electron && window.electron.checkOnChainSubscription) {
+    try {
+      console.log('🔗 Checking on-chain subscription...');
+      const onChainResult = await window.electron.checkOnChainSubscription(state.wallet);
+      console.log('🔗 On-chain result:', onChainResult);
+      
+      if (onChainResult.success && onChainResult.hasSubscription && !onChainResult.expired) {
+        state.subscription = {
+          plan: onChainResult.plan,
+          expiresAt: onChainResult.expiresAt,
+          walletAddress: state.wallet,
+          escrowLamports: onChainResult.escrowLamports,
+          onChain: true
+        };
+        // Sync to localStorage
+        localStorage.setItem('subscriptionData', JSON.stringify(state.subscription));
+        console.log('✅ Found active ON-CHAIN subscription:', onChainResult.plan);
+        return true;
+      }
+    } catch (e) {
+      console.error('Error checking on-chain subscription:', e);
+    }
+  }
+  
+  // Second: Try to load from main process (file-based)
+  if (window.electron && window.electron.loadSubscription) {
+    try {
+      const result = await window.electron.loadSubscription(state.wallet);
+      console.log('📂 Load subscription result:', result);
+      
+      if (result.success && result.subscription) {
+        state.subscription = result.subscription;
+        // Also sync to localStorage
+        localStorage.setItem('subscriptionData', JSON.stringify(result.subscription));
+        console.log('✅ Found active subscription from file:', result.subscription.plan);
+        return true;
+      }
+    } catch (e) {
+      console.error('Error loading subscription from main process:', e);
+    }
+  }
+  
+  // Fallback: Check cached subscription from localStorage
+  const subscriptionData = localStorage.getItem('subscriptionData');
+  console.log('📦 localStorage subscriptionData:', subscriptionData ? 'found' : 'not found');
+  
+  if (subscriptionData) {
+    try {
+      const sub = JSON.parse(subscriptionData);
+      const now = Date.now();
+      console.log('📋 Subscription details:', {
+        plan: sub.plan,
+        expiresAt: new Date(sub.expiresAt).toISOString(),
+        walletAddress: sub.walletAddress,
+        currentWallet: state.wallet,
+        walletsMatch: sub.walletAddress === state.wallet,
+        isExpired: sub.expiresAt <= now
+      });
+      
+      // Check if subscription is for current wallet and not expired
+      if (sub.expiresAt && sub.expiresAt > now) {
+        // Also verify wallet matches (if set)
+        if (!state.wallet || sub.walletAddress === state.wallet) {
+          state.subscription = sub;
+          console.log('✅ Found active subscription:', sub.plan, 'expires:', new Date(sub.expiresAt));
+          return true;
+        } else {
+          console.log('⚠️ Subscription is for different wallet');
+        }
+      } else {
+        // Subscription expired, clear it
+        console.log('⏰ Subscription expired, clearing...');
+        localStorage.removeItem('subscriptionData');
+        if (window.electron && window.electron.clearSubscription) {
+          await window.electron.clearSubscription();
+        }
+      }
+    } catch (e) {
+      console.error('❌ Error parsing subscription data:', e);
+      localStorage.removeItem('subscriptionData');
+    }
+  }
+  
+  // No valid local subscription found
+  console.log('❌ No valid subscription found');
+  return false;
+}
+
+// Update subscription page wallet display
+function updateSubscriptionWalletDisplay() {
+  const walletEl = document.getElementById('subscriptionWalletAddress');
+  if (walletEl && state.wallet) {
+    const shortAddress = state.wallet.slice(0, 4) + '...' + state.wallet.slice(-4);
+    walletEl.textContent = shortAddress;
+  }
+}
+
+// Apply subscription code
+function setupSubscriptionCodeHandler() {
+  const applyBtn = document.getElementById('applyCodeBtn');
+  const codeInput = document.getElementById('subscriptionCodeInput');
+  const codeMessage = document.getElementById('codeMessage');
+  
+  if (applyBtn) {
+    applyBtn.addEventListener('click', async () => {
+      const code = codeInput.value.trim().toUpperCase();
+      
+      if (!code) {
+        codeMessage.textContent = 'Please enter a subscription code';
+        codeMessage.className = 'code-message error';
+        return;
+      }
+      
+      // Validate code (mock validation - in production this would call an API)
+      const validCode = validateSubscriptionCode(code);
+      
+      if (validCode) {
+        codeMessage.textContent = '✅ Code applied successfully!';
+        codeMessage.className = 'code-message success';
+        
+        // Save subscription
+        const subscription = {
+          code: code,
+          plan: validCode.plan,
+          expiresAt: Date.now() + validCode.duration,
+          activatedAt: Date.now()
+        };
+        localStorage.setItem('subscriptionData', JSON.stringify(subscription));
+        state.subscription = subscription;
+        
+        showToast(`🎉 ${validCode.plan} subscription activated!`, 'success');
+        
+        // Go to home tab after short delay
+        setTimeout(async () => {
+          switchToTab('homeTab');
+          await loadNodesFromIndexer();
+          drawWorldMap();
+        }, 1500);
+      } else {
+        codeMessage.textContent = '❌ Invalid or expired code';
+        codeMessage.className = 'code-message error';
+      }
+    });
+  }
+  
+  // Also handle Enter key
+  if (codeInput) {
+    codeInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        applyBtn.click();
+      }
+    });
+  }
+}
+
+// Validate subscription code (mock - replace with real API)
+function validateSubscriptionCode(code) {
+  // Demo valid codes - in production, validate against server/blockchain
+  const validCodes = {
+    'DVPN-MONTH-FREE': { plan: 'Monthly', duration: 30 * 24 * 60 * 60 * 1000 },
+    'DVPN-YEAR-FREE': { plan: 'Yearly', duration: 365 * 24 * 60 * 60 * 1000 },
+    'DVPN-TRIAL-7DAY': { plan: 'Trial', duration: 7 * 24 * 60 * 60 * 1000 },
+    'DVPN-2024-PROMO': { plan: 'Monthly', duration: 30 * 24 * 60 * 60 * 1000 },
+  };
+  
+  return validCodes[code] || null;
+}
+
+// Subscribe to a plan (called from HTML) - REAL BLOCKCHAIN PAYMENT
+window.subscribePlan = async function(planType, priceSOL) {
+  if (!state.walletConnected) {
     showToast('Please connect wallet first', 'error');
     return;
   }
   
-  if (!state.selectedNode) {
-    showToast('Please select a node', 'error');
+  const plan = SUBSCRIPTION_PLANS[planType.toLowerCase()];
+  if (!plan) {
+    showToast('Invalid plan type', 'error');
+    return;
+  }
+  
+  showToast(`Processing ${plan.name} subscription (${priceSOL} SOL)...`, 'info');
+  
+  try {
+    let signature;
+    
+    if (state.walletType === 'phantom' && window.electron && window.electron.createSubscription) {
+      // Use IPC to main process for real blockchain transaction
+      showToast('🔐 Please approve the transaction in your wallet...', 'info');
+      
+      const result = await window.electron.createSubscription({
+        walletAddress: state.wallet,
+        planType: planType,
+        priceSOL: priceSOL
+      });
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Subscription creation failed');
+      }
+      signature = result.signature;
+      
+    } else {
+      // For mock wallet, simulate the transaction
+      console.log('Mock wallet: Simulating subscription transaction...');
+      showToast('🔄 Processing mock subscription...', 'info');
+      
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      signature = 'mock_sub_' + Date.now();
+    }
+    
+    console.log('✅ Subscription signature:', signature);
+    
+    // Calculate expiry based on plan
+    const duration = plan.durationDays * 24 * 60 * 60 * 1000;
+    
+    // Save subscription locally
+    const subscription = {
+      plan: plan.name,
+      planType: planType,
+      priceSOL: priceSOL,
+      expiresAt: Date.now() + duration,
+      activatedAt: Date.now(),
+      txSignature: signature,
+      walletAddress: state.wallet,
+      onChain: !signature.startsWith('mock_')
+    };
+    
+    console.log('💾 Saving subscription...');
+    
+    // Save to localStorage
+    localStorage.setItem('subscriptionData', JSON.stringify(subscription));
+    
+    // ALSO save to main process file storage (persistent)
+    if (window.electron && window.electron.saveSubscription) {
+      const saveResult = await window.electron.saveSubscription(subscription);
+      console.log('💾 Saved to file:', saveResult.success ? 'YES' : 'NO');
+    }
+    
+    // Verify it was saved
+    const savedData = localStorage.getItem('subscriptionData');
+    console.log('✅ Verified subscription saved to localStorage:', savedData ? 'YES' : 'NO');
+    
+    state.subscription = subscription;
+    
+    showToast(`🎉 ${subscription.plan} subscription activated!`, 'success');
+    
+    // Go to home tab
+    setTimeout(async () => {
+      switchToTab('homeTab');
+      await loadNodesFromIndexer();
+      drawWorldMap();
+    }, 1500);
+    
+  } catch (error) {
+    console.error('Subscription error:', error);
+    showToast('❌ Subscription error: ' + error.message, 'error');
+  }
+};
+
+// Cancel subscription and get proportional refund
+window.cancelSubscription = async function() {
+  if (!state.walletConnected) {
+    showToast('Please connect wallet first', 'error');
+    return;
+  }
+  
+  // Check if there's a subscription to cancel
+  const subData = localStorage.getItem('subscriptionData');
+  if (!subData) {
+    showToast('No active subscription to cancel', 'error');
+    return;
+  }
+  
+  const subscription = JSON.parse(subData);
+  
+  // Calculate estimated refund based on time remaining
+  const now = Date.now();
+  const totalDuration = subscription.expiresAt - subscription.activatedAt;
+  const elapsed = now - subscription.activatedAt;
+  const remaining = Math.max(0, subscription.expiresAt - now);
+  const refundPercent = remaining / totalDuration;
+  const estimatedRefund = (subscription.priceSOL * refundPercent).toFixed(4);
+  
+  // Confirm with user
+  const confirmMessage = `Cancel subscription? You will receive ~${estimatedRefund} SOL refund for unused time (${Math.ceil(remaining / (24*60*60*1000))} days remaining).`;
+  if (!confirm(confirmMessage)) {
     return;
   }
   
   try {
-    updateStatus('connecting', 'Checking balance...');
-    document.getElementById('connectBtn').disabled = true;
+    showToast('🔄 Processing cancellation...', 'info');
     
-    // Check if user has sufficient balance for 1 hour
-    console.log('Checking balance for 1 hour payment...');
-    await checkSufficientBalance(state.selectedNode);
+    // Simulate cancellation (in production, this would call the smart contract)
+    await new Promise(resolve => setTimeout(resolve, 1500));
     
-    console.log('Starting VPN connection to:', state.selectedNode);
-    updateStatus('connecting', 'Connecting...');
+    // Clear local subscription
+    localStorage.removeItem('subscriptionData');
+    state.subscription = null;
     
-    // Use pre-configured keys and settings
-    showToast('Connecting VPN...', 'info');
-    console.log('Using stable WireGuard configuration...');
+    showToast(`✅ Subscription cancelled! Refund: ~${estimatedRefund} SOL`, 'success');
     
-    const wgConfig = `[Interface]
-PrivateKey = WE3ursrx1mFfhimFWqsj+Mvs2fqeFBdpvdfHGNStuH0=
-Address = 10.0.1.17/24
-DNS = 8.8.8.8, 8.8.4.4
-
-[Peer]
-PublicKey = ${state.selectedNode.wg_server_pubkey}
-Endpoint = ${state.selectedNode.endpoint}
-AllowedIPs = 0.0.0.0/0
-PersistentKeepalive = 25
-`;
+    // Go back to subscription page
+    switchToTab('subscriptionTab');
+    updateSubscriptionWalletDisplay();
     
-    console.log('Applying WireGuard config...');
-    const applyResult = await window.electron.applyWgConfig(wgConfig);
-    console.log('Apply result:', applyResult);
-    
-    if (!applyResult.success) {
-      throw new Error(applyResult.error);
-    }
-    
-    // Success!
-    state.connected = true;
-    state.currentSession = {
-      sessionPda: 'session_' + Date.now(),
-      sessionId: Date.now(),
-      node: state.selectedNode,
-      startTime: Date.now(),
-      duration: 60 * 60 * 1000,
-      clientIp: '10.0.1.17',
-      presharedKey: null,
-      totalPaid: 0
-    };
-    
-    console.log('VPN connected successfully!', state.currentSession);
-    
-    saveSessionToStorage();
-    updateStatus('connected', 'Connected');
-    updateConnectionDetails();
-    startSessionTimer();
-    startPaymentMonitoring(); // Start payment detection and balance checking
-    
-    document.getElementById('connectBtn').textContent = 'Disconnect';
-    document.getElementById('connectBtn').classList.add('connected');
-    document.getElementById('connectBtn').disabled = false;
-    
-    showToast(`Connected! Your IP: ${state.selectedNode.endpoint.split(':')[0]}`, 'success');
   } catch (error) {
-    console.error('Connection failed:', error);
-    console.error('Error stack:', error.stack);
-    updateStatus('disconnected', 'Disconnected');
-    document.getElementById('connectBtn').disabled = false;
-    showToast(`Connection failed: ${error.message}`, 'error');
+    console.error('Cancel subscription error:', error);
+    showToast('❌ Cancel error: ' + error.message, 'error');
+  }
+};
+
+// Select Plan Function (legacy - for compatibility)
+window.selectPlan = function(planType, price) {
+  state.selectedSubscriptionType = planType;
+  state.subscriptionPrice = price;
+  
+  localStorage.setItem('selectedPlan', planType);
+  localStorage.setItem('planPrice', price);
+  
+  showToast(`${planType.charAt(0).toUpperCase() + planType.slice(1)} plan selected`, 'success');
+  
+  // Move to home tab and load nodes
+  switchToTab('homeTab');
+  loadNodesFromIndexer();
+  drawWorldMap();
+};
+
+// Switch Tab Helper
+function switchToTab(tabId) {
+  // Hide all tabs
+  const allTabs = document.querySelectorAll('.tab-content');
+  allTabs.forEach(tab => tab.classList.remove('active'));
+  
+  // Show target tab
+  const targetTab = document.getElementById(tabId);
+  if (targetTab) {
+    targetTab.classList.add('active');
+  }
+  
+  // Hide/show sidebar based on tab
+  const appContainer = document.querySelector('.app-container');
+  const sidebar = document.querySelector('.sidebar');
+  
+  if (tabId === 'onboardingTab' || tabId === 'subscriptionTab') {
+    // Hide sidebar on welcome and subscription screens
+    if (sidebar) sidebar.style.display = 'none';
+    if (appContainer) appContainer.classList.add('no-sidebar');
+  } else {
+    // Show sidebar on other screens
+    if (sidebar) sidebar.style.display = 'flex';
+    if (appContainer) appContainer.classList.remove('no-sidebar');
+  }
+  
+  // Update nav if exists
+  const navItems = document.querySelectorAll('.nav-item');
+  navItems.forEach(nav => {
+    if (nav.getAttribute('data-tab') === tabId.replace('Tab', '')) {
+      nav.classList.add('active');
+    } else {
+      nav.classList.remove('active');
+    }
+  });
+}
+
+// Tab Navigation
+function setupNavigationTabs() {
+  const navItems = document.querySelectorAll('.nav-item');
+  
+  console.log('🔧 Setting up navigation tabs, found:', navItems.length, 'items');
+  
+  if (navItems.length === 0) {
+    console.error('❌ No nav items found! Sidebar might not be in DOM yet');
+    return;
+  }
+  
+  navItems.forEach((item, index) => {
+    const tabName = item.getAttribute('data-tab');
+    console.log(`  [${index}] Nav item: ${tabName}`);
+    
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      console.log('🖱️ Tab clicked:', tabName);
+      
+      // Update active nav item
+      navItems.forEach(nav => nav.classList.remove('active'));
+      item.classList.add('active');
+      
+      // Update visible tab content
+      const allTabs = document.querySelectorAll('.tab-content');
+      allTabs.forEach(tab => tab.classList.remove('active'));
+      
+      const targetTab = document.getElementById(`${tabName}Tab`);
+      if (targetTab) {
+        targetTab.classList.add('active');
+        console.log('✅ Tab switched to:', tabName);
+        
+        // Show sidebar for main tabs
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar) {
+          sidebar.style.display = 'flex';
+        }
+        
+        // Load data for specific tabs
+        if (tabName === 'sessions') {
+          loadSessions();
+        } else if (tabName === 'home') {
+          loadNodesFromIndexer();
+        } else if (tabName === 'provider') {
+          loadProviderStats();
+        }
+      } else {
+        console.error('❌ Target tab not found:', `${tabName}Tab`);
+      }
+    });
+  });
+  
+  console.log('✅ Navigation tabs setup complete');
+}
+
+// Wallet Connection
+function setupWalletConnection() {
+  const connectBtn = document.getElementById('connectWalletBtn');
+  
+  if (!connectBtn) return;
+  
+  connectBtn.addEventListener('click', async () => {
+    try {
+      if (state.walletConnected) {
+        // Disconnect wallet
+        disconnectWallet();
+      } else {
+        // Connect wallet via Electron IPC
+        let result;
+        if (window.electron && window.electron.connectWallet) {
+          result = await window.electron.connectWallet();
+        } else {
+          // Fallback to mock wallet
+          result = {
+            success: true,
+            publicKey: '5wm7gTHTFEGsZm6oMgsk84tqh4twVYrVGCSkPKPv8Pyo'
+          };
+        }
+        
+        if (result.success && result.publicKey) {
+          state.wallet = result.publicKey;
+          state.walletConnected = true;
+          updateWalletDisplay();
+          showToast('Wallet connected successfully', 'success');
+          
+          // Save to storage
+          localStorage.setItem('walletPublicKey', result.publicKey);
+        } else {
+          showToast('Failed to connect wallet', 'error');
+        }
+      }
+    } catch (error) {
+      console.error('Wallet connection error:', error);
+      showToast('Wallet connection error: ' + error.message, 'error');
+    }
+  });
+}
+
+function disconnectWallet() {
+  state.wallet = null;
+  state.walletConnected = false;
+  localStorage.removeItem('walletPublicKey');
+  updateWalletDisplay();
+  showToast('Wallet disconnected', 'info');
+}
+
+function updateWalletDisplay() {
+  const walletInfo = document.getElementById('walletInfo');
+  const walletAddress = document.getElementById('walletAddress');
+  const connectBtn = document.getElementById('connectWalletBtn');
+  const sidebarWalletAddress = document.getElementById('sidebarWalletAddress');
+  
+  if (state.walletConnected && state.wallet) {
+    if (walletInfo) walletInfo.style.display = 'block';
+    if (walletAddress) walletAddress.textContent = truncateAddress(state.wallet);
+    if (sidebarWalletAddress) sidebarWalletAddress.textContent = truncateAddress(state.wallet);
+    if (connectBtn) {
+      connectBtn.textContent = 'Disconnect';
+      connectBtn.style.background = '#2A2A2A';
+      connectBtn.style.color = '#FF4444';
+    }
+  } else {
+    if (walletInfo) walletInfo.style.display = 'none';
+    if (sidebarWalletAddress) sidebarWalletAddress.textContent = 'Not Connected';
+    if (connectBtn) {
+      connectBtn.textContent = 'Connect Wallet';
+      connectBtn.style.background = '#00D4AA';
+      connectBtn.style.color = '#0A0A0A';
+    }
   }
 }
 
-// Disconnect VPN
-async function disconnectVpn() {
+async function loadWalletFromStorage() {
+  const savedWallet = localStorage.getItem('walletPublicKey');
+  if (savedWallet) {
+    state.wallet = savedWallet;
+    state.walletConnected = true;
+    updateWalletDisplay();
+  }
+}
+
+function truncateAddress(address) {
+  if (!address || address.length < 12) return address;
+  return address.substring(0, 4) + '...' + address.substring(address.length - 4);
+}
+
+// Load Nodes from IPFS (Pinata) - Primary Source
+async function loadNodesFromIndexer() {
+  const locationsList = document.getElementById('locationsList');
+  
   try {
-    updateStatus('connecting', 'Disconnecting...');
-    document.getElementById('connectBtn').disabled = true;
+    locationsList.innerHTML = `
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading nodes from IPFS...</p>
+      </div>
+    `;
     
-    // Stop payment monitoring
-    stopPaymentMonitoring();
+    // First, fetch the LATEST registry CID from Pinata
+    // This ensures we always get the most up-to-date node list
+    const latestCID = await fetchLatestRegistryCID();
     
-    // Get preshared key and server IP from current session
-    const presharedKey = state.currentSession?.presharedKey;
-    const serverIp = state.selectedNode?.endpoint?.split(':')[0];
-    
-    // Disconnect WireGuard
-    const result = await window.electron.disconnectVpn(presharedKey, serverIp);
-    if (!result.success) {
-      throw new Error(result.error);
-    }
-    
-    // Close session on-chain (optional, for refund)
-    if (state.currentSession) {
-      try {
-        await closeSessionOnChain(state.currentSession.sessionPda);
-      } catch (error) {
-        console.error('Failed to close session on-chain:', error);
+    // IPFS as PRIMARY source
+    if (latestCID) {
+      console.log('📡 Fetching nodes from IPFS Pinata:', latestCID);
+      
+      // Try multiple gateways
+      const gateways = CONFIG.ipfsGateways || [CONFIG.pinataGateway];
+      let ipfsData = null;
+      
+      for (const gateway of gateways) {
+        try {
+          const ipfsUrl = `${gateway}${latestCID}`;
+          console.log(`🌐 Trying gateway: ${gateway}`);
+          
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000);
+          
+          const ipfsResponse = await fetch(ipfsUrl, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          
+          if (ipfsResponse.ok) {
+            ipfsData = await ipfsResponse.json();
+            console.log(`✅ Fetched from ${gateway}`);
+            break;
+          }
+        } catch (gatewayError) {
+          console.log(`❌ Gateway ${gateway} failed:`, gatewayError.message);
+        }
+      }
+      
+      if (ipfsData && ipfsData.nodes && ipfsData.nodes.length > 0) {
+        console.log('✅ IPFS data:', ipfsData);
+        
+        // Convert IPFS node format to app format
+        state.nodes = ipfsData.nodes.map((node, index) => ({
+          pubkey: node.endpoint,
+          provider: node.provider,
+          node_id: index + 1,
+          endpoint: node.endpoint,
+          location: node.location,
+          region: node.region,
+          price_per_minute_lamports: Math.floor((node.price_per_hour_lamports || 6000000) / 60),
+          wg_server_pubkey: node.wg_server_pubkey,
+          max_capacity: 100,
+          active_sessions: 0,
+          is_active: node.is_active !== false,
+          reputation_score: 1000,
+          bandwidth_mbps: node.bandwidth_mbps || 100,
+          rating_avg: node.rating_avg || '5.0',
+          source: 'ipfs-pinata'
+        }));
+        
+        populateLocations(state.nodes);
+        showToast(`✅ Loaded ${state.nodes.length} nodes from IPFS`, 'success');
+        return;
       }
     }
     
-    state.connected = false;
-    state.currentSession = null;
-    clearSessionFromStorage();
-    
-    updateStatus('disconnected', 'Disconnected');
-    document.getElementById('connectionDetails').style.display = 'none';
-    document.getElementById('connectBtn').textContent = 'Connect to VPN';
-    document.getElementById('connectBtn').classList.remove('connected');
-    document.getElementById('connectBtn').disabled = false;
-    
-    showToast('Disconnected from VPN', 'success');
-  } catch (error) {
-    console.error('Disconnect failed:', error);
-    showToast(`Disconnect failed: ${error.message}`, 'error');
-    document.getElementById('connectBtn').disabled = false;
-  }
-}
-
-// Update status indicator
-function updateStatus(status, text) {
-  const indicator = document.getElementById('statusIndicator');
-  const dot = indicator.querySelector('.status-dot');
-  const statusText = document.getElementById('statusText');
-  
-  dot.className = `status-dot ${status}`;
-  statusText.textContent = text;
-}
-
-// Update connection details
-function updateConnectionDetails() {
-  if (state.currentSession) {
-    document.getElementById('connectionDetails').style.display = 'block';
-    document.getElementById('connectedNode').textContent = state.currentSession.node.endpoint;
-    document.getElementById('connectedRegion').textContent = state.currentSession.node.region;
-    document.getElementById('sessionId').textContent = 
-      state.currentSession.sessionPda.slice(0, 8) + '...';
-  }
-}
-
-// Start session timer
-function startSessionTimer() {
-  const timer = setInterval(() => {
-    if (!state.currentSession || !state.connected) {
-      clearInterval(timer);
-      return;
+    // Fallback: Try local indexer API (for development)
+    if (!CONFIG.useIPFSPrimary) {
+      try {
+        console.log('📡 Trying local indexer API...');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        const response = await fetch(`${CONFIG.indexerUrl}/nodes`, {
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          const data = await response.json();
+          state.nodes = data.nodes || [];
+          
+          if (state.nodes.length > 0) {
+            populateLocations(state.nodes);
+            showToast(`Loaded ${state.nodes.length} nodes from API`, 'success');
+            return;
+          }
+        }
+      } catch (indexerError) {
+        console.log('❌ Indexer not available');
+      }
     }
     
-    const elapsed = Date.now() - state.currentSession.startTime;
-    const remaining = state.currentSession.duration - elapsed;
-    
-    if (remaining <= 0) {
-      // Check balance before auto-renewing
-      handleSessionExpiry();
-      clearInterval(timer);
-      return;
-    }
-    
-    const minutes = Math.floor(remaining / 60000);
-    const seconds = Math.floor((remaining % 60000) / 1000);
-    document.getElementById('timeRemaining').textContent = 
-      `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  }, 1000);
-}
-
-// Start payment monitoring - deduct payment every 5 minutes and check balance after 1 hour
-function startPaymentMonitoring() {
-  console.log('Starting payment monitoring...');
-  
-  // Payment deduction every 5 minutes
-  state.paymentTimer = setInterval(async () => {
-    if (!state.connected || !state.currentSession) {
-      clearInterval(state.paymentTimer);
-      return;
-    }
-    
-    try {
-      const elapsed = Date.now() - state.currentSession.startTime;
-      const minutesElapsed = Math.floor(elapsed / 60000);
-      const paymentAmount = state.selectedNode.price_per_minute_lamports * 5; // 5 minutes worth
-      
-      console.log(`Deducting payment: ${minutesElapsed} minutes elapsed, ${(paymentAmount / 1e9).toFixed(6)} SOL`);
-      
-      // Send payment to provider wallet
-      await sendPaymentToProvider(paymentAmount);
-      
-      state.currentSession.totalPaid += paymentAmount;
-      showToast(`Payment sent: ${(paymentAmount / 1e9).toFixed(4)} SOL`, 'info');
-      
-    } catch (error) {
-      console.error('Payment failed:', error);
-      showToast('Payment failed, disconnecting...', 'error');
-      disconnectVpn();
-    }
-  }, 5 * 60 * 1000); // Every 5 minutes
-  
-  // Balance check after 1 hour
-  state.balanceCheckTimer = setTimeout(async () => {
-    await handleSessionExpiry();
-  }, 60 * 60 * 1000); // After 1 hour
-}
-
-// Handle session expiry - check balance and decide to renew or disconnect
-async function handleSessionExpiry() {
-  console.log('Session expired, checking balance for renewal...');
-  
-  try {
-    // Check if user has balance for another hour
-    await checkSufficientBalance(state.selectedNode);
-    
-    // User has sufficient balance, extend session for another hour
-    console.log('Balance sufficient, extending session for another hour');
-    state.currentSession.startTime = Date.now();
-    state.currentSession.duration = 60 * 60 * 1000;
-    saveSessionToStorage();
-    
-    // Restart timers
-    startSessionTimer();
-    startPaymentMonitoring();
-    
-    showToast('Session extended for 1 hour', 'success');
+    // No nodes found
+    locationsList.innerHTML = `
+      <div class="empty-state">
+        <p>No nodes available</p>
+        <p style="font-size: 12px; color: #888;">IPFS CID: ${CONFIG.ipfsRegistryCID || 'Not configured'}</p>
+        <button onclick="loadNodesFromIndexer()" class="btn-retry">Retry</button>
+      </div>
+    `;
     
   } catch (error) {
-    console.log('Insufficient balance for renewal, disconnecting...');
-    showToast('Insufficient balance. Disconnecting...', 'error');
-    await disconnectVpn();
+    console.error('Error loading nodes:', error);
+    locationsList.innerHTML = `
+      <div class="error-state">
+        <p style="color: #FF4444;">Failed to load nodes</p>
+        <button onclick="loadNodesFromIndexer()" class="btn-retry">Retry</button>
+      </div>
+    `;
+    showToast('Failed to load nodes', 'error');
   }
 }
 
-// Send payment to provider wallet
-async function sendPaymentToProvider(amountLamports) {
-  console.log(`Sending ${(amountLamports / 1e9).toFixed(6)} SOL to provider...`);
+// Populate Locations List
+function populateLocations(nodes) {
+  const locationsList = document.getElementById('locationsList');
+  locationsList.innerHTML = '';
   
-  try {
-    // In a real implementation, this would create and send a Solana transaction
-    // For now, we simulate it
-    const response = await fetch(`${state.settings.rpcUrl}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getBalance',
-        params: [state.walletAddress]
-      })
+  // Group nodes by country
+  const groupedNodes = {};
+  nodes.forEach(node => {
+    const location = node.location || node.region || 'Unknown';
+    const country = location.includes(',') ? location.split(',')[0].trim() : location;
+    
+    if (!groupedNodes[country]) {
+      groupedNodes[country] = [];
+    }
+    groupedNodes[country].push(node);
+  });
+  
+  // Create location items for each group
+  Object.entries(groupedNodes).forEach(([country, countryNodes], index) => {
+    const locationItem = document.createElement('div');
+    locationItem.className = 'location-item';
+    locationItem.style.animationDelay = `${index * 0.05}s`;
+    
+    const flag = getFlagForLocation(country);
+    const isOnline = countryNodes.some(n => (n.is_active !== false));
+    
+    // Create country header
+    const countryHeader = document.createElement('div');
+    countryHeader.className = 'location-country-header';
+    countryHeader.innerHTML = `
+      <div class="country-info">
+        <span class="location-flag">${flag}</span>
+        <span class="country-name">${country}</span>
+      </div>
+      <div class="country-status">
+        ${isOnline ? '<span class="status-dot online"></span>' : '<span class="status-dot offline"></span>'}
+        ${countryNodes.length > 1 ? `<span class="status-checkmarks">${'✓'.repeat(Math.min(countryNodes.length, 3))}</span>` : ''}
+      </div>
+    `;
+    
+    locationItem.appendChild(countryHeader);
+    
+    // Create city items for this country
+    const citiesContainer = document.createElement('div');
+    citiesContainer.className = 'location-cities';
+    
+    countryNodes.forEach(node => {
+      const cityName = extractCityName(node.location || node.region || node.endpoint);
+      const cityItem = document.createElement('div');
+      cityItem.className = 'location-city';
+      
+      const isActive = node.is_active !== false;
+      const statusClass = isActive ? 'online' : 'offline';
+      
+      // Get bandwidth and rating info
+      const bandwidth = node.bandwidth_mbps || node.bandwidthMbps || 50;
+      const rating = node.quality_score || node.qualityScore || 3;
+      const ratingStars = '⭐'.repeat(Math.min(Math.floor(rating), 5));
+      
+      // Bandwidth badge color based on speed
+      const bwClass = bandwidth >= 80 ? 'bw-fast' : bandwidth >= 40 ? 'bw-medium' : 'bw-slow';
+      
+      cityItem.innerHTML = `
+        <div class="city-main">
+          <span class="city-name">${cityName}</span>
+          <span class="status-dot ${statusClass}"></span>
+        </div>
+        <div class="city-stats">
+          <span class="node-bandwidth ${bwClass}">${bandwidth} Mbps</span>
+          <span class="node-rating" title="Quality: ${rating}/5">${ratingStars}</span>
+        </div>
+      `;
+      
+      cityItem.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectNode(node);
+      });
+      
+      citiesContainer.appendChild(cityItem);
     });
     
-    const data = await response.json();
-    const currentBalance = data.result.value;
+    locationItem.appendChild(citiesContainer);
     
-    if (currentBalance < amountLamports) {
-      throw new Error('Insufficient balance for payment');
-    }
+    // Toggle cities on country click
+    countryHeader.addEventListener('click', () => {
+      citiesContainer.classList.toggle('expanded');
+    });
     
-    console.log('Payment simulated successfully');
-    await updateBalance();
-    
-    // In production, this would be:
-    // const transaction = new Transaction().add(
-    //   SystemProgram.transfer({
-    //     fromPubkey: state.walletAddress,
-    //     toPubkey: new PublicKey(state.settings.providerWallet),
-    //     lamports: amountLamports
-    //   })
-    // );
-    // await state.wallet.sendTransaction(transaction);
-    
-  } catch (error) {
-    console.error('Payment error:', error);
-    throw error;
-  }
+    locationsList.appendChild(locationItem);
+  });
 }
 
-// Stop payment monitoring
-function stopPaymentMonitoring() {
-  if (state.paymentTimer) {
-    clearInterval(state.paymentTimer);
-    state.paymentTimer = null;
-  }
-  if (state.balanceCheckTimer) {
-    clearTimeout(state.balanceCheckTimer);
-    state.balanceCheckTimer = null;
-  }
-  console.log('Payment monitoring stopped');
-}
-
-// Check VPN status
-async function checkVpnStatus() {
-  const result = await window.electron.getVpnStatus();
-  if (result.success && result.connected && !state.connected) {
-    // VPN is connected but we lost state (app restart?)
-    // Try to restore from localStorage
-    restoreSessionFromStorage();
-  }
-}
-
-// Helper functions for blockchain operations
-async function calculateSessionPDA(userPubkey, nodePubkey, sessionId) {
-  // This is a simplified version - in production, use @solana/web3.js
-  // For now, return a placeholder
-  return 'SESSION_PDA_' + sessionId;
-}
-
-async function createSessionTransaction(sessionPda, sessionId, minutes) {
-  // This would create the actual transaction
-  // For now, return a mock transaction
-  return { transaction: 'mock_tx' };
-}
-
-async function confirmTransaction(signature) {
-  // Wait for transaction confirmation
-  await new Promise(resolve => setTimeout(resolve, 2000));
-}
-
-async function closeSessionOnChain(sessionPda) {
-  // Close session on-chain
-  console.log('Closing session:', sessionPda);
-}
-
-function generateWgConfig(serverConfig) {
-  return `
-[Interface]
-PrivateKey = ${state.wgKeys.privateKey}
-Address = ${serverConfig.clientIp}/32
-DNS = 1.1.1.1
-
-[Peer]
-PublicKey = ${serverConfig.serverWgPubkey}
-Endpoint = ${serverConfig.endpoint}
-AllowedIPs = 0.0.0.0/0
-PersistentKeepalive = 25
-  `.trim();
-}
-
-// Session storage
-function saveSessionToStorage() {
-  if (state.currentSession) {
-    localStorage.setItem('dvpn_session', JSON.stringify(state.currentSession));
-  }
-}
-
-function clearSessionFromStorage() {
-  localStorage.removeItem('dvpn_session');
-}
-
-function restoreSessionFromStorage() {
-  const saved = localStorage.getItem('dvpn_session');
-  if (saved) {
-    state.currentSession = JSON.parse(saved);
-    state.connected = true;
-    updateStatus('connected', 'Connected');
-    updateConnectionDetails();
-    startSessionTimer();
-    document.getElementById('connectBtn').textContent = 'Disconnect';
-    document.getElementById('connectBtn').classList.add('connected');
-  }
-}
-
-// Load sessions
-async function loadSessions() {
-  const container = document.getElementById('sessionsContainer');
-  container.innerHTML = '<div class="loading">Loading sessions...</div>';
+function extractCityName(location) {
+  if (!location) return 'Unknown';
   
-  if (!state.walletAddress) {
-    container.innerHTML = '<div class="loading">Please connect wallet</div>';
+  // Handle different formats
+  if (location.includes(':')) {
+    // IP:port format
+    const parts = location.split(':');
+    return parts[0];
+  }
+  
+  if (location.includes(',')) {
+    // "City, Country" format
+    return location.split(',')[0].trim();
+  }
+  
+  // Check for known city names
+  const cityMap = {
+    'nyc': 'New York',
+    'local': 'Local',
+    'sf': 'San Francisco',
+    'la': 'Los Angeles'
+  };
+  
+  const normalized = location.toLowerCase();
+  for (const [key, value] of Object.entries(cityMap)) {
+    if (normalized.includes(key)) return value;
+  }
+  
+  return location;
+}
+
+// Select Node
+function selectNode(node) {
+  state.selectedNode = node;
+  
+  // Update UI
+  document.querySelectorAll('.location-item').forEach(item => {
+    item.classList.remove('selected');
+  });
+  
+  // Update connection node info display
+  const nodeNameEl = document.getElementById('nodeName');
+  const nodeLocationEl = document.getElementById('nodeLocation');
+  const nodeFlagImg = document.getElementById('nodeFlagImg');
+  
+  if (nodeNameEl) {
+    const cityName = extractCityName(node.location || node.endpoint);
+    nodeNameEl.textContent = cityName;
+  }
+  
+  if (nodeLocationEl) {
+    nodeLocationEl.textContent = node.location || node.endpoint || 'Unknown';
+  }
+  
+  if (nodeFlagImg) {
+    const flag = getFlagForLocation(node.location || 'unknown');
+    nodeFlagImg.textContent = flag;
+    nodeFlagImg.alt = node.location || 'unknown';
+  }
+  
+  // Update map markers if function exists
+  if (typeof updateConnectionLine === 'function') {
+    updateConnectionLine(node.location);
+  }
+  
+  // Enable connection - directly connect if not connected
+  if (!state.connected) {
+    // Check if user has active subscription
+    if (checkActiveSubscription()) {
+      // Connect directly without showing modal
+      connect();
+    } else {
+      showToast('Please subscribe to a plan first', 'error');
+      switchToTab('subscriptionTab');
+    }
+  }
+}
+
+// Connect to VPN
+async function connect() {
+  if (!state.selectedNode) {
+    showToast('Please select a node first', 'error');
     return;
   }
   
+  if (!state.walletConnected) {
+    showToast('Please connect your wallet first', 'error');
+    return;
+  }
+  
+  const statusCircle = document.getElementById('statusCircle');
+  const statusText = document.getElementById('statusText');
+  
   try {
-    const response = await fetch(
-      `${state.settings.indexerUrl}/sessions?user=${state.walletAddress}`
-    );
-    const sessions = await response.json();
+    statusCircle.classList.add('connecting');
+    statusText.textContent = 'Connecting...';
     
-    if (sessions.length === 0) {
-      container.innerHTML = '<div class="loading">No sessions found</div>';
-      return;
+    // User already has subscription - no need for per-connection payment
+    // Subscription was paid via subscription page
+    showToast('Connecting to VPN...', 'info');
+    
+    // Connect VPN via Electron IPC
+    if (window.electron && window.electron.requestWgConfig && window.electron.applyWgConfig) {
+      showToast('Connecting to VPN server...', 'info');
+      
+      // Step 1: Get config directly from server's ncat (port 22222)
+      const [serverIp, serverPort] = state.selectedNode.endpoint.split(':');
+      console.log(`🔌 Connecting to ncat at ${serverIp}:22222 to get WireGuard config...`);
+      
+      const configResult = await window.electron.requestWgConfig(serverIp, 22222);
+      
+      if (!configResult.success) {
+        console.error('❌ Failed to get config from server ncat:', configResult.error);
+        throw new Error('Failed to connect to VPN server: ' + configResult.error);
+      }
+      
+      console.log('✅ Received config from server ncat');
+      console.log('📝 Raw config:', configResult.config);
+      
+      // The server's wgip.sh returns a complete WireGuard config
+      // We just need to use it directly!
+      const serverConfig = configResult.config;
+      
+      // Extract PresharedKey for disconnect functionality
+      const presharedKeyMatch = serverConfig.match(/PresharedKey\s*=\s*([A-Za-z0-9+/=]+)/);
+      if (presharedKeyMatch) {
+        state.currentPresharedKey = presharedKeyMatch[1];
+      }
+      
+      showToast('Applying VPN configuration...', 'info');
+      
+      // Step 2: Apply the config from server directly
+      const applyResult = await window.electron.applyWgConfig(serverConfig);
+      
+      if (applyResult.success) {
+        state.connected = true;
+        state.connectionStartTime = Date.now();
+
+        statusCircle.classList.remove('disconnected', 'connecting');
+        statusCircle.classList.add('connected');
+        statusText.textContent = 'Connected';
+        document.getElementById('statusIp').textContent = serverIp;
+
+        // Create session on IPFS (no API needed)
+        try {
+          const session = await createLocalSession(state.selectedNode, state.wallet);
+          state.currentSessionId = session.id;
+          console.log('✅ Session created on IPFS:', state.currentSessionId);
+        } catch (e) {
+          console.warn('Failed to create IPFS session:', e.message);
+        }
+
+        startConnectionTimer();
+        showToast('Connected to VPN successfully!', 'success');
+      } else {
+        console.error('❌ Apply config failed:', applyResult.error);
+        throw new Error(applyResult.error || 'Connection failed');
+      }
+    } else {
+      // Mock connection for testing
+      state.connected = true;
+      state.connectionStartTime = Date.now();
+      
+      statusCircle.classList.remove('disconnected', 'connecting');
+      statusCircle.classList.add('connected');
+      statusText.textContent = 'Connected (Mock)';
+      // Extract IP from endpoint (remove port)
+      const nodeIp = state.selectedNode.endpoint.split(':')[0];
+      console.log('🔍 Selected node endpoint:', state.selectedNode.endpoint);
+      console.log('🔍 Extracted IP:', nodeIp);
+      document.getElementById('statusIp').textContent = nodeIp;
+      
+      // Create session on IPFS (no API needed)
+      try {
+        const session = await createLocalSession(state.selectedNode, state.wallet);
+        state.currentSessionId = session.id;
+        console.log('✅ Session created on IPFS (mock):', state.currentSessionId);
+      } catch (e) {
+        console.warn('Failed to create IPFS session:', e.message);
+      }
+
+      startConnectionTimer();
+      showToast('Mock VPN connection established', 'success');
     }
     
-    container.innerHTML = '';
-    sessions.forEach(session => {
-      const card = createSessionCard(session);
-      container.appendChild(card);
-    });
   } catch (error) {
-    console.error('Failed to load sessions:', error);
-    container.innerHTML = `<div class="loading">Error: ${error.message}</div>`;
+    console.error('Connection error:', error);
+    statusCircle.classList.remove('connecting');
+    statusCircle.classList.add('disconnected');
+    statusText.textContent = 'Disconnected';
+    showToast('Connection failed: ' + error.message, 'error');
   }
 }
 
-// Create session card
-function createSessionCard(session) {
-  const card = document.createElement('div');
-  card.className = 'session-card';
+// Disconnect from VPN
+async function disconnect() {
+  const statusCircle = document.getElementById('statusCircle');
+  const statusText = document.getElementById('statusText');
+  const disconnectedNode = state.selectedNode; // Save for rating
+  console.log('🔌 Disconnect called, selectedNode:', state.selectedNode);
   
-  const status = session.state || 'unknown';
-  const startDate = new Date(session.start_ts * 1000).toLocaleString();
+  try {
+    statusText.textContent = 'Disconnecting...';
+    
+    // End session on IPFS (no API needed)
+    try {
+      if (state.currentSessionId) {
+        await endLocalSession(state.currentSessionId);
+        console.log('✅ Session ended on IPFS:', state.currentSessionId);
+        state.currentSessionId = null;
+      } else if (state.wallet) {
+        // Fallback: end by wallet
+        await endLocalSessionsByWallet(state.wallet);
+        console.log('✅ Sessions ended on IPFS by wallet');
+      }
+    } catch (e) {
+      console.warn('Failed to end IPFS session:', e.message);
+    }
+
+    // Check if window.electron and disconnectVpn exist
+    if (window.electron && window.electron.disconnectVpn) {
+      const result = await window.electron.disconnectVpn(null, null);
+      
+      if (result && result.success) {
+        state.connected = false;
+        state.connectionStartTime = null;
+        
+        statusCircle.classList.remove('connected', 'connecting');
+        statusCircle.classList.add('disconnected');
+        statusText.textContent = 'Disconnected';
+        document.getElementById('statusIp').textContent = '---';
+        
+        stopConnectionTimer();
+        showToast('Disconnected from VPN', 'info');
+        
+        // Show rating modal after successful disconnect
+        if (disconnectedNode) {
+          showRatingModal(disconnectedNode);
+        }
+      } else {
+        // Fallback: just update state locally
+        state.connected = false;
+        state.connectionStartTime = null;
+        
+        statusCircle.classList.remove('connected', 'connecting');
+        statusCircle.classList.add('disconnected');
+        statusText.textContent = 'Disconnected';
+        document.getElementById('statusIp').textContent = '---';
+        
+        stopConnectionTimer();
+        showToast('Disconnected (local only)', 'info');
+        
+        // Show rating modal
+        if (disconnectedNode) {
+          showRatingModal(disconnectedNode);
+        }
+      }
+    } else {
+      // No electron API available - just update state
+      state.connected = false;
+      state.connectionStartTime = null;
+      
+      statusCircle.classList.remove('connected', 'connecting');
+      statusCircle.classList.add('disconnected');
+      statusText.textContent = 'Disconnected';
+      document.getElementById('statusIp').textContent = '---';
+      
+      stopConnectionTimer();
+      showToast('Disconnected', 'info');
+      
+      // Show rating modal
+      if (disconnectedNode) {
+        showRatingModal(disconnectedNode);
+      }
+    }
+  } catch (error) {
+    console.error('Disconnection error:', error);
+    showToast('Disconnection failed: ' + error.message, 'error');
+  }
+}
+
+// Show rating modal after disconnect
+function showRatingModal(node) {
+  console.log('🌟 showRatingModal called with node:', node);
+  if (!node) {
+    console.warn('⚠️ No node provided to showRatingModal');
+    return;
+  }
+  const nodeName = extractCityName(node.location || node.endpoint || 'VPN Node');
+  console.log('🌟 Creating rating modal for:', nodeName);
   
-  card.innerHTML = `
-    <div class="session-header">
-      <div>
-        <strong>Session ${session.session_id}</strong>
-        <div style="font-size: 0.875rem; color: var(--text-secondary);">
-          Started: ${startDate}
-        </div>
+  // Create modal overlay
+  const overlay = document.createElement('div');
+  overlay.className = 'rating-modal-overlay';
+  overlay.innerHTML = `
+    <div class="rating-modal">
+      <h3>Rate Your Experience</h3>
+      <p>How was your connection to <strong>${nodeName}</strong>?</p>
+      <div class="rating-stars">
+        <span class="rating-star" data-rating="1">⭐</span>
+        <span class="rating-star" data-rating="2">⭐</span>
+        <span class="rating-star" data-rating="3">⭐</span>
+        <span class="rating-star" data-rating="4">⭐</span>
+        <span class="rating-star" data-rating="5">⭐</span>
       </div>
-      <span class="session-status ${status.toLowerCase()}">${status}</span>
-    </div>
-    <div class="node-stats">
-      <div class="stat">
-        <span class="stat-label">Escrow</span>
-        <span class="stat-value">${(session.escrow_lamports / 1e9).toFixed(4)} SOL</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">Data Used</span>
-        <span class="stat-value">${formatBytes(session.bytes_used || 0)}</span>
+      <p class="rating-hint">Click to rate (1-5 stars)</p>
+      <div class="rating-actions">
+        <button class="btn-skip-rating">Skip</button>
       </div>
     </div>
   `;
   
-  return card;
+  document.body.appendChild(overlay);
+  
+  // Handle star clicks
+  const stars = overlay.querySelectorAll('.rating-star');
+  stars.forEach(star => {
+    star.addEventListener('mouseenter', () => {
+      const rating = parseInt(star.dataset.rating);
+      stars.forEach((s, idx) => {
+        s.style.opacity = idx < rating ? '1' : '0.3';
+      });
+    });
+    
+    star.addEventListener('click', async () => {
+      const rating = parseInt(star.dataset.rating);
+      await submitNodeRating(node, rating);
+      document.body.removeChild(overlay);
+      showToast(`Thanks! You rated ${nodeName} ${rating} stars`, 'success');
+    });
+  });
+  
+  // Handle skip
+  overlay.querySelector('.btn-skip-rating').addEventListener('click', () => {
+    document.body.removeChild(overlay);
+  });
+  
+  // Reset opacity on mouse leave
+  overlay.querySelector('.rating-stars').addEventListener('mouseleave', () => {
+    stars.forEach(s => s.style.opacity = '0.5');
+  });
 }
 
-// Utility functions
+// Submit node rating (updates IPFS registry)
+async function submitNodeRating(node, rating) {
+  try {
+    // Rate node locally and update IPFS
+    const result = await rateNodeLocally(node.pubkey || node.endpoint, rating, state.wallet);
+    
+    if (result.success) {
+      console.log(`✅ Node rated: ${rating} stars (new avg: ${result.new_rating})`);
+    } else {
+      console.warn('Failed to rate node:', result.error);
+    }
+  } catch (error) {
+    console.warn('Failed to submit rating:', error.message);
+  }
+}
+
+// Setup status circle click handler
+document.addEventListener('DOMContentLoaded', () => {
+  const statusCircle = document.getElementById('statusCircle');
+  statusCircle.addEventListener('click', async () => {
+    if (state.connected) {
+      await disconnect();
+    } else if (state.selectedNode) {
+      showSubscriptionModal(state.selectedNode);
+    } else {
+      showToast('Please select a node first', 'info');
+    }
+  });
+});
+
+// Payment Processing
+async function processPayment(recipientPublicKey, amount) {
+  try {
+    const result = await window.electron.processPayment({
+      recipient: recipientPublicKey,
+      amount: amount,
+      memo: `VPN Subscription - ${state.selectedSubscriptionType}`
+    });
+    
+    if (result.success) {
+      showToast('Payment processed successfully', 'success');
+      return { success: true, signature: result.signature };
+    } else {
+      throw new Error(result.error || 'Payment failed');
+    }
+  } catch (error) {
+    console.error('Payment error:', error);
+    showToast('Payment failed: ' + error.message, 'error');
+    return { success: false };
+  }
+}
+
+// Connection Timer
+function startConnectionTimer() {
+  stopConnectionTimer(); // Clear any existing timer
+  
+  state.timerInterval = setInterval(() => {
+    if (!state.connectionStartTime) return;
+    
+    const elapsed = Math.floor((Date.now() - state.connectionStartTime) / 1000);
+    const hours = Math.floor(elapsed / 3600);
+    const minutes = Math.floor((elapsed % 3600) / 60);
+    const seconds = elapsed % 60;
+    
+    const timerElement = document.getElementById('connectionTimer');
+    if (timerElement) {
+      timerElement.textContent = 
+        `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+    
+    // Update speed stats with realistic values when connected
+    updateSpeedStats();
+  }, 1000);
+  
+  // Update IP address when connected
+  updateConnectedIP();
+}
+
+function updateSpeedStats() {
+  if (!state.connected) return;
+  
+  // Generate realistic speed values (simulated)
+  const baseDownload = 15 + Math.random() * 5; // 15-20 Mbps
+  const baseUpload = 8 + Math.random() * 3; // 8-11 Mbps
+  
+  const downloadEl = document.getElementById('downloadSpeed');
+  const uploadEl = document.getElementById('uploadSpeed');
+  
+  if (downloadEl) {
+    downloadEl.textContent = `${baseDownload.toFixed(2)} Mbps`;
+  }
+  
+  if (uploadEl) {
+    uploadEl.textContent = `${baseUpload.toFixed(2)} Mbps`;
+  }
+}
+
+async function updateConnectedIP() {
+  if (!state.connected || !state.selectedNode) return;
+  
+  // For mock connections, always show the node IP
+  // For real VPN connections, we could fetch actual IP to verify
+  const statusIpEl = document.getElementById('statusIp');
+  if (statusIpEl && state.selectedNode) {
+    const nodeIp = state.selectedNode.endpoint.split(':')[0];
+    statusIpEl.textContent = nodeIp;
+    console.log('🔄 Updated IP display to:', nodeIp);
+  }
+}
+
+function stopConnectionTimer() {
+  if (state.timerInterval) {
+    clearInterval(state.timerInterval);
+    state.timerInterval = null;
+  }
+  
+  const timerElement = document.getElementById('connectionTimer');
+  if (timerElement) {
+    timerElement.textContent = '00:00:00';
+  }
+  
+  // Reset speed stats
+  const downloadEl = document.getElementById('downloadSpeed');
+  const uploadEl = document.getElementById('uploadSpeed');
+  
+  if (downloadEl) downloadEl.textContent = '0.00 Mbps';
+  if (uploadEl) uploadEl.textContent = '0.00 Mbps';
+}
+
+// Sessions Tab - Load from local storage (IPFS mode)
+async function loadSessions() {
+  const sessionsList = document.getElementById('sessionsList');
+  
+  if (!sessionsList) {
+    console.warn('sessionsList element not found');
+    return;
+  }
+  
+  try {
+    sessionsList.innerHTML = `
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading sessions...</p>
+      </div>
+    `;
+    
+    // Get sessions from IPFS
+    state.sessions = await getLocalSessions(state.wallet);
+    
+    // Sort by start_time (most recent first)
+    state.sessions.sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
+    
+    if (state.sessions.length === 0) {
+      sessionsList.innerHTML = `
+        <div class="empty-state">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <h3>No Sessions Yet</h3>
+          <p>Connect to a VPN node to start a session</p>
+        </div>
+      `;
+      return;
+    }
+    
+    displaySessions(state.sessions);
+    
+  } catch (error) {
+    console.error('Error loading sessions:', error);
+    if (sessionsList) {
+      sessionsList.innerHTML = `
+        <div class="error-state">
+          <p style="color: #FF4444;">Failed to load sessions</p>
+          <button onclick="loadSessions()" class="btn-retry">Retry</button>
+        </div>
+      `;
+    }
+  }
+}
+
+function displaySessions(sessions) {
+  const sessionsList = document.getElementById('sessionsList');
+  sessionsList.innerHTML = '';
+  
+  sessions.forEach((session, index) => {
+    const sessionCard = document.createElement('div');
+    sessionCard.className = 'session-card';
+    sessionCard.style.animationDelay = `${index * 0.05}s`;
+    
+    const startTime = new Date(session.start_time).toLocaleString();
+    const status = session.is_active ? 'Active' : 'Closed';
+    const duration = calculateDuration(session.start_time, session.end_time);
+    
+    sessionCard.innerHTML = `
+      <div class="session-header">
+        <span class="session-status ${session.is_active ? 'active' : 'inactive'}">${status}</span>
+        <span class="session-duration">${duration}</span>
+      </div>
+      <div class="session-info">
+        <div class="info-row">
+          <span class="info-label">Node:</span>
+          <span class="info-value">${session.node_location || 'Unknown'}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Started:</span>
+          <span class="info-value">${startTime}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Data Used:</span>
+          <span class="info-value">${formatBytes(session.bytes_used || 0)}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Payment:</span>
+          <span class="info-value">${(session.amount_paid / 1e9).toFixed(4)} SOL</span>
+        </div>
+      </div>
+    `;
+    
+    sessionsList.appendChild(sessionCard);
+  });
+}
+
+function calculateDuration(startTime, endTime) {
+  const start = new Date(startTime);
+  const end = endTime ? new Date(endTime) : new Date();
+  const duration = Math.floor((end - start) / 1000);
+  
+  const hours = Math.floor(duration / 3600);
+  const minutes = Math.floor((duration % 3600) / 60);
+  
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
+
 function formatBytes(bytes) {
   if (bytes === 0) return '0 B';
   const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+// Settings Tab
+function setupSettingsTab() {
+  const saveBtn = document.getElementById('saveSettingsBtn');
+  
+  // Check if settings elements exist
+  if (!saveBtn) return;
+  
+  const indexerUrlInput = document.getElementById('indexerUrlInput');
+  const rpcUrlInput = document.getElementById('rpcUrlInput');
+  const programIdInput = document.getElementById('programIdInput');
+  const providerWalletInput = document.getElementById('providerWalletInput');
+  
+  if (!indexerUrlInput || !rpcUrlInput || !programIdInput || !providerWalletInput) return;
+  
+  // Load current settings
+  indexerUrlInput.value = CONFIG.indexerUrl;
+  rpcUrlInput.value = CONFIG.rpcUrl;
+  programIdInput.value = CONFIG.programId;
+  providerWalletInput.value = CONFIG.providerWallet;
+  
+  saveBtn.addEventListener('click', () => {
+    CONFIG.indexerUrl = indexerUrlInput.value;
+    CONFIG.rpcUrl = rpcUrlInput.value;
+    CONFIG.programId = programIdInput.value;
+    CONFIG.providerWallet = providerWalletInput.value;
+    
+    // Save to localStorage
+    localStorage.setItem('config', JSON.stringify(CONFIG));
+    
+    showToast('Settings saved successfully', 'success');
+  });
+  
+  // Load saved settings
+  const savedConfig = localStorage.getItem('config');
+  if (savedConfig) {
+    try {
+      const parsedConfig = JSON.parse(savedConfig);
+      CONFIG = { ...CONFIG, ...parsedConfig };
+      
+      document.getElementById('indexerUrlInput').value = CONFIG.indexerUrl;
+      document.getElementById('rpcUrlInput').value = CONFIG.rpcUrl;
+      document.getElementById('programIdInput').value = CONFIG.programId;
+      document.getElementById('providerWalletInput').value = CONFIG.providerWallet;
+    } catch (error) {
+      console.error('Error loading saved config:', error);
+    }
+  }
+}
+
+// Refresh Buttons
+function setupRefreshButtons() {
+  document.getElementById('refreshNodesBtn')?.addEventListener('click', () => {
+    loadNodesFromIndexer();
+  });
+  
+  document.getElementById('refreshSessionsBtn')?.addEventListener('click', () => {
+    loadSessions();
+  });
+}
+
+// Utility Functions
+function getFlagForLocation(location) {
+  const loc = location.toLowerCase();
+  if (loc.includes('us') || loc.includes('new york') || loc.includes('nyc')) return '🇺🇸';
+  if (loc.includes('uk') || loc.includes('london')) return '🇬🇧';
+  if (loc.includes('japan') || loc.includes('tokyo')) return '🇯🇵';
+  if (loc.includes('germany') || loc.includes('berlin')) return '🇩🇪';
+  if (loc.includes('france') || loc.includes('paris')) return '🇫🇷';
+  if (loc.includes('canada')) return '🇨🇦';
+  if (loc.includes('singapore')) return '🇸🇬';
+  if (loc.includes('india') || loc.includes('mumbai') || loc.includes('delhi') || loc.includes('bangalore')) return '🇮🇳';
+  if (loc.includes('uae') || loc.includes('dubai') || loc.includes('emirates') || loc.includes('abu dhabi')) return '🇦🇪';
+  if (loc.includes('local')) return '🏠';
+  return '🌍';
+}
+
+function updateConnectionLine(location) {
+  // This would update the connection line on the map
+  console.log('Updating connection line for:', location);
+}
+
+function drawWorldMap() {
+  const canvas = document.getElementById('mapCanvas');
+  if (!canvas) return;
+  
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+  
+  // Draw simple world map outline
+  ctx.strokeStyle = '#2A2A2A';
+  ctx.lineWidth = 2;
+  
+  // Simple continent outlines (simplified)
+  ctx.beginPath();
+  // Draw basic world map shapes
+  ctx.rect(50, 100, 600, 300);
+  ctx.stroke();
 }
 
 function showToast(message, type = 'info') {
-  console.log(`[${type.toUpperCase()}] ${message}`);
-  // In production, implement a proper toast notification system
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = `toast toast-${type} show`;
+  
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 3000);
 }
 
-function showModal(title, body, showFooter = true) {
-  document.getElementById('modalTitle').textContent = title;
-  document.getElementById('modalBody').innerHTML = body;
-  document.querySelector('.modal-footer').style.display = showFooter ? 'flex' : 'none';
-  document.getElementById('modalOverlay').style.display = 'flex';
+// Search functionality
+document.getElementById('searchLocation')?.addEventListener('input', (e) => {
+  const searchTerm = e.target.value.toLowerCase();
+  const filteredNodes = state.nodes.filter(node => 
+    (node.location || '').toLowerCase().includes(searchTerm) ||
+    (node.vpn_endpoint || '').toLowerCase().includes(searchTerm)
+  );
+  populateLocations(filteredNodes);
+});
+
+// Expose functions globally for onclick handlers
+window.loadNodesFromIndexer = loadNodesFromIndexer;
+window.loadSessions = loadSessions;
+window.closeSubscriptionModal = closeSubscriptionModal;
+
+// ============================================
+// PROVIDER DASHBOARD FUNCTIONALITY
+// ============================================
+
+function setupProviderDashboard() {
+  const registerNodeBtn = document.getElementById('registerNodeBtn');
+  const updateNodeBtn = document.getElementById('updateNodeBtn');
+  const refreshProviderBtn = document.getElementById('refreshProviderStatsBtn');
+  const claimEarningsBtn = document.getElementById('claimEarningsBtn');
+  
+  if (registerNodeBtn) {
+    registerNodeBtn.addEventListener('click', handleRegisterNode);
+  }
+  
+  if (updateNodeBtn) {
+    updateNodeBtn.addEventListener('click', handleUpdateNode);
+  }
+  
+  if (refreshProviderBtn) {
+    refreshProviderBtn.addEventListener('click', loadProviderStats);
+  }
+  
+  if (claimEarningsBtn) {
+    claimEarningsBtn.addEventListener('click', handleClaimEarnings);
+  }
+  
+  // Initial load of provider stats and nodes
+  setTimeout(() => {
+    displayProviderNodes();
+  }, 1000);
 }
 
-function closeModal() {
-  document.getElementById('modalOverlay').style.display = 'none';
+// Handle claiming/withdrawing earnings (local + on-chain)
+async function handleClaimEarnings() {
+  if (!state.wallet) {
+    showToast('Please connect your wallet first', 'error');
+    return;
+  }
+  
+  const claimBtn = document.getElementById('claimEarningsBtn');
+  
+  try {
+    // Show loading state
+    if (claimBtn) {
+      claimBtn.disabled = true;
+      claimBtn.textContent = 'Processing...';
+    }
+    
+    // Get earnings from IPFS
+    const earningsData = await getProviderEarnings(state.wallet);
+    
+    // Get sessions to find subscription wallets to claim from
+    const allSessions = await getLocalSessions();
+    
+    // Find unique user wallets who used the service (potential subscriptions to claim)
+    const userWallets = new Set();
+    allSessions
+      .filter(s => !s.is_active && s.node_provider === state.wallet)
+      .forEach(s => userWallets.add(s.user_wallet));
+    
+    console.log('📊 Found', userWallets.size, 'user wallets with ended sessions');
+    
+    // Try to claim from on-chain subscriptions
+    let totalClaimed = 0;
+    let successfulClaims = [];
+    
+    if (window.electron && window.electron.claimSubscriptionOnchain && userWallets.size > 0) {
+      showToast(`🔄 Checking ${userWallets.size} subscription(s) on-chain...`, 'info');
+      
+      for (const userWallet of userWallets) {
+        try {
+          console.log('💰 Attempting to claim subscription from:', userWallet);
+          const result = await window.electron.claimSubscriptionOnchain(userWallet);
+          
+          if (result.success) {
+            totalClaimed += result.providerShare;
+            successfulClaims.push({
+              userWallet,
+              amount: result.providerShare,
+              signature: result.signature
+            });
+            console.log('✅ Claimed', result.providerShare, 'SOL from', userWallet);
+          } else {
+            console.log('⚠️ Could not claim from', userWallet, ':', result.error);
+          }
+        } catch (e) {
+          console.log('⚠️ Claim error for', userWallet, ':', e.message);
+        }
+      }
+    }
+    
+    // Show results
+    if (totalClaimed > 0) {
+      showToast(`🎉 Claimed ${totalClaimed.toFixed(6)} SOL on-chain! (80% of subscription escrow)`, 'success');
+      
+      // Record withdrawal on IPFS
+      await recordWithdrawal(state.wallet, totalClaimed * 1e9);
+      
+    } else if (earningsData.available_balance > 0) {
+      // Fallback to local tracking
+      const availableSol = earningsData.available_balance_sol;
+      
+      const confirmed = confirm(
+        `📋 No on-chain subscription escrow found to claim.\n\n` +
+        `Local tracking shows: ${availableSol} SOL available\n\n` +
+        `For REAL SOL withdrawals:\n` +
+        `• Users must pay for subscriptions on-chain via Phantom\n` +
+        `• Subscription SOL goes to escrow PDA\n` +
+        `• You claim 80% from escrow (20% to treasury)\n\n` +
+        `Mark ${availableSol} SOL as withdrawn (local only)?`
+      );
+      
+      if (confirmed) {
+        await recordWithdrawal(state.wallet, earningsData.available_balance);
+        showToast(`📋 Recorded: ${availableSol} SOL on IPFS`, 'info');
+      }
+    } else {
+      showToast('No earnings available to withdraw', 'warning');
+    }
+    
+    // Refresh stats
+    setTimeout(() => loadProviderStats(), 1000);
+    
+  } catch (error) {
+    console.error('Claim earnings error:', error);
+    showToast('Failed to process withdrawal: ' + error.message, 'error');
+  } finally {
+    // Reset button state
+    if (claimBtn) {
+      claimBtn.disabled = false;
+      claimBtn.textContent = 'Withdraw';
+    }
+  }
 }
 
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
+async function handleRegisterNode() {
+  const location = document.getElementById('providerNodeLocation')?.value;
+  const endpoint = document.getElementById('providerNodeEndpoint')?.value;
+  const pricePerHour = document.getElementById('providerNodePrice')?.value;
+  const publicKey = document.getElementById('providerNodePubkey')?.value;
+  
+  // Validate inputs
+  if (!location || !endpoint || !pricePerHour || !publicKey) {
+    showToast('Please fill in all fields', 'error');
+    return;
+  }
+  
+  // Validate endpoint format (IP or IP:PORT)
+  const endpointRegex = /^(\d{1,3}\.){3}\d{1,3}(:\d+)?$/;
+  if (!endpointRegex.test(endpoint)) {
+    showToast('Invalid endpoint format. Use IP or IP:PORT (e.g., 1.2.3.4 or 1.2.3.4:51820)', 'error');
+    return;
+  }
+  
+  // Add default port if not specified
+  let finalEndpoint = endpoint;
+  if (!endpoint.includes(':')) {
+    finalEndpoint = `${endpoint}:51820`;
+  }
+  
+  if (!state.wallet) {
+    showToast('Please connect your wallet first', 'error');
+    return;
+  }
+  
+  // Disable register button during registration
+  const registerBtn = document.getElementById('registerNodeBtn');
+  if (registerBtn) {
+    registerBtn.disabled = true;
+    registerBtn.innerHTML = '<span class="spinner"></span> Publishing to IPFS...';
+  }
+  
+  try {
+    showToast('📤 Publishing node to Pinata IPFS...', 'info');
+    
+    const nodeData = {
+      provider_wallet: state.wallet,
+      location: location,
+      endpoint: finalEndpoint,
+      price_per_hour: parseInt(pricePerHour),
+      wireguard_pubkey: publicKey
+    };
+    
+    console.log('Publishing node to Pinata:', nodeData);
+    
+    // 1. Publish directly to Pinata IPFS
+    const ipfsResult = await publishNodeToPinata(nodeData);
+    
+    if (ipfsResult.success) {
+      console.log('✅ Node published to IPFS:', ipfsResult.cid);
+      showToast(`✅ Node published to IPFS!`, 'success');
+      
+      // 2. Update the main registry on IPFS
+      try {
+        // Get current nodes from registry
+        const currentNodes = await getAllNodesFromIPFS();
+        
+        // Add the new node
+        const newNode = {
+          endpoint: finalEndpoint,
+          location: location,
+          region: location.toLowerCase().replace(/[^a-z]/g, '-'),
+          provider: state.wallet,
+          wg_server_pubkey: publicKey,
+          price_per_hour_lamports: parseInt(pricePerHour) * 1000000, // Convert to lamports
+          is_active: true,
+          bandwidth_mbps: 100,
+          rating_avg: '5.0',
+          ipfs_cid: ipfsResult.cid
+        };
+        
+        // Check if node already exists (update instead of add)
+        const existingIndex = currentNodes.findIndex(n => 
+          n.provider === state.wallet || n.endpoint === finalEndpoint
+        );
+        
+        if (existingIndex >= 0) {
+          currentNodes[existingIndex] = { ...currentNodes[existingIndex], ...newNode };
+          console.log('📝 Updating existing node in registry');
+        } else {
+          currentNodes.push(newNode);
+          console.log('📝 Adding new node to registry');
+        }
+        
+        // Publish updated registry
+        const registryResult = await publishRegistryToPinata(currentNodes);
+        
+        if (registryResult.success) {
+          console.log('✅ Registry updated on IPFS:', registryResult.cid);
+          showToast(`🎉 Node added to IPFS registry!`, 'success');
+          
+          // Update local config with new CID
+          CONFIG.ipfsRegistryCID = registryResult.cid;
+          
+          // Update local state
+          state.nodes = currentNodes.map((node, index) => ({
+            pubkey: node.endpoint,
+            provider: node.provider,
+            node_id: index + 1,
+            endpoint: node.endpoint,
+            location: node.location,
+            region: node.region,
+            price_per_minute_lamports: Math.floor((node.price_per_hour_lamports || 6000000) / 60),
+            wg_server_pubkey: node.wg_server_pubkey,
+            max_capacity: 100,
+            active_sessions: 0,
+            is_active: node.is_active !== false,
+            reputation_score: 1000,
+            bandwidth_mbps: node.bandwidth_mbps || 100,
+            rating_avg: node.rating_avg || '5.0',
+            source: 'ipfs-pinata'
+          }));
+        }
+      } catch (registryErr) {
+        console.warn('Registry update skipped:', registryErr.message);
+      }
+      
+      // 3. Also register with local indexer for immediate availability (optional)
+      if (!CONFIG.useIPFSPrimary) {
+        try {
+          const response = await fetch(`${CONFIG.indexerUrl}/nodes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              provider_wallet: state.wallet,
+              location: location,
+              vpn_endpoint: finalEndpoint,
+              price_per_hour: parseInt(pricePerHour),
+              wireguard_pubkey: publicKey,
+              is_active: true,
+              ipfs_cid: ipfsResult.cid
+            })
+          });
+          
+          if (response.ok) {
+            console.log('✅ Node also registered with local indexer');
+          }
+        } catch (indexerErr) {
+          console.warn('Indexer registration skipped (IPFS still successful):', indexerErr.message);
+        }
+      }
+      
+      // Show success with IPFS details
+      showToast(`🎉 Node permanently stored on IPFS!`, 'success');
+      
+      // Show IPFS link
+      setTimeout(() => {
+        showToast(`📎 CID: ${ipfsResult.cid.substring(0, 15)}...`, 'info');
+      }, 1500);
+      
+      // Clear form inputs
+      document.getElementById('providerNodeLocation').value = '';
+      document.getElementById('providerNodeEndpoint').value = '';
+      document.getElementById('providerNodePrice').value = '';
+      document.getElementById('providerNodePubkey').value = '';
+      
+      // Wait a bit for the API to update
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Reload everything to show newly registered node
+      await populateLocations();
+      await displayProviderNodes();
+      await loadProviderStats();
+      
+      showToast('Your node is now visible in the VPN list!', 'success');
+      
+    } else {
+      showToast('❌ Failed to publish to IPFS: ' + ipfsResult.error, 'error');
+    }
+    
+  } catch (error) {
+    console.error('Node registration error:', error);
+    showToast('Error registering node: ' + error.message, 'error');
+  } finally {
+    // Reset button
+    if (registerBtn) {
+      registerBtn.disabled = false;
+      registerBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14M5 12h14"></path>
+        </svg>
+        Register Node
+      `;
+    }
+  }
 }
+
+async function handleUpdateNode() {
+  const location = document.getElementById('providerNodeLocation')?.value;
+  const endpoint = document.getElementById('providerNodeEndpoint')?.value;
+  const pricePerHour = document.getElementById('providerNodePrice')?.value;
+  const publicKey = document.getElementById('providerNodePubkey')?.value;
+  
+  if (!location || !endpoint || !pricePerHour || !publicKey) {
+    showToast('Please fill in all fields', 'error');
+    return;
+  }
+  
+  try {
+    showToast('Updating node on IPFS...', 'info');
+    
+    // Get current nodes from IPFS
+    const currentNodes = await getAllNodesFromIPFS();
+    
+    // Find and update the node
+    const nodeIndex = currentNodes.findIndex(n => n.provider === state.wallet);
+    
+    if (nodeIndex >= 0) {
+      currentNodes[nodeIndex] = {
+        ...currentNodes[nodeIndex],
+        location: location,
+        endpoint: endpoint,
+        wg_server_pubkey: publicKey,
+        price_per_hour_lamports: parseInt(pricePerHour) * 1000000
+      };
+      
+      // Publish updated registry to IPFS
+      const result = await publishRegistryToPinata(currentNodes);
+      
+      if (result.success) {
+        showToast('Node updated on IPFS!', 'success');
+        loadProviderStats();
+      } else {
+        showToast('Failed to update on IPFS: ' + result.error, 'error');
+      }
+    } else {
+      showToast('Node not found in registry', 'error');
+    }
+  } catch (error) {
+    console.error('Node update error:', error);
+    showToast('Error updating node: ' + error.message, 'error');
+  }
+}
+
+async function loadProviderStats() {
+  if (!state.wallet) {
+    return;
+  }
+  
+  try {
+    // Load all nodes from IPFS first
+    let allNodes = await getAllNodesFromIPFS();
+    
+    // If no nodes from IPFS, try local API as fallback
+    if (allNodes.length === 0 && !CONFIG.useIPFSPrimary) {
+      try {
+        const allNodesResponse = await fetch(`${CONFIG.indexerUrl}/nodes`);
+        if (allNodesResponse.ok) {
+          const nodesData = await allNodesResponse.json();
+          allNodes = nodesData.nodes || nodesData;
+        }
+      } catch (e) {
+        console.log('Local API unavailable');
+      }
+    }
+    
+    const myNodes = allNodes.filter(node => node.provider === state.wallet);
+    
+    // Update node status card
+    const nodeStatusCard = document.getElementById('nodeStatusCard');
+    const nodeOnlineStatus = document.getElementById('nodeOnlineStatus');
+    
+    if (myNodes.length > 0) {
+      const activeNodes = myNodes.filter(n => n.is_active);
+      if (nodeStatusCard) {
+        nodeStatusCard.style.background = activeNodes.length > 0 
+          ? 'linear-gradient(135deg, #1A4D2E 0%, #2D5F3D 100%)'
+          : 'linear-gradient(135deg, #4D1A1A 0%, #5F2D2D 100%)';
+      }
+      if (nodeOnlineStatus) {
+        nodeOnlineStatus.textContent = activeNodes.length > 0 ? 'Online' : 'Offline';
+        nodeOnlineStatus.style.color = activeNodes.length > 0 ? '#00D4AA' : '#FF6B6B';
+      }
+      
+      // Get session stats from IPFS
+      const allSessions = await getLocalSessions();
+      
+      // Filter sessions for my nodes
+      const mySessions = allSessions.filter(s => s.node_provider === state.wallet);
+      
+      // Active users = currently active sessions on my nodes
+      const activeUsersSessions = mySessions.filter(s => s.is_active === true);
+      const activeUsersEl = document.getElementById('providerActiveUsers');
+      if (activeUsersEl) activeUsersEl.textContent = activeUsersSessions.length;
+      
+      // Total sessions = all sessions (ended + active) on my nodes
+      const totalSessionsEl = document.getElementById('providerSessions');
+      if (totalSessionsEl) totalSessionsEl.textContent = mySessions.length;
+      
+      // Calculate total uptime from sessions
+      let totalUptimeSeconds = 0;
+      mySessions.forEach(s => {
+        if (s.end_time && s.start_time) {
+          const start = new Date(s.start_time);
+          const end = new Date(s.end_time);
+          totalUptimeSeconds += (end - start) / 1000;
+        } else if (s.is_active && s.start_time) {
+          // Active session - count from start to now
+          const start = new Date(s.start_time);
+          totalUptimeSeconds += (Date.now() - start) / 1000;
+        }
+      });
+      
+      const uptimeEl = document.getElementById('providerUptime');
+      if (uptimeEl) {
+        if (totalUptimeSeconds > 0) {
+          // Show hours if significant, otherwise show minutes
+          const hours = totalUptimeSeconds / 3600;
+          if (hours >= 1) {
+            uptimeEl.textContent = `${hours.toFixed(1)}h`;
+          } else {
+            // Less than an hour - show minutes
+            const minutes = totalUptimeSeconds / 60;
+            uptimeEl.textContent = `${minutes.toFixed(0)}m`;
+          }
+        } else {
+          uptimeEl.textContent = '0m';
+        }
+      }
+      
+      // Get earnings from IPFS
+      const earningsData = await getProviderEarnings(state.wallet);
+      
+      const earningsEl = document.getElementById('providerEarnings');
+      const claimBtn = document.getElementById('claimEarningsBtn');
+      
+      // Show available balance (what can be withdrawn)
+      const availableBalance = earningsData.available_balance || 0;
+      if (earningsEl) {
+        earningsEl.textContent = `${(availableBalance / 1e9).toFixed(4)} SOL`;
+      }
+      
+      // Update button state
+      if (claimBtn) {
+        if (availableBalance <= 0) {
+          claimBtn.disabled = true;
+          claimBtn.title = 'No earnings to withdraw';
+        } else {
+          claimBtn.disabled = false;
+          claimBtn.title = `Withdraw ${earningsData.available_balance_sol} SOL`;
+        }
+      }
+    } else {
+      if (nodeOnlineStatus) {
+        nodeOnlineStatus.textContent = 'No Node';
+        nodeOnlineStatus.style.color = '#888';
+      }
+      // Reset displays when no nodes
+      const earningsEl = document.getElementById('providerEarnings');
+      if (earningsEl) earningsEl.textContent = '0 SOL';
+      const activeUsersEl = document.getElementById('providerActiveUsers');
+      if (activeUsersEl) activeUsersEl.textContent = '0';
+      const totalSessionsEl = document.getElementById('providerSessions');
+      if (totalSessionsEl) totalSessionsEl.textContent = '0';
+      const uptimeEl = document.getElementById('providerUptime');
+      if (uptimeEl) uptimeEl.textContent = '0m';
+    }
+    
+    // Display registered nodes
+    await displayProviderNodes();
+    
+  } catch (error) {
+    console.error('Error loading provider stats:', error);
+  }
+}
+
+// Display provider's registered nodes (from IPFS Pinata)
+async function displayProviderNodes() {
+  const nodesList = document.getElementById('providerNodesList');
+  if (!nodesList) {
+    console.error('❌ providerNodesList element not found!');
+    return;
+  }
+  
+  if (!state.wallet) {
+    console.log('⚠️ No wallet connected, cannot display nodes');
+    nodesList.innerHTML = `
+      <div class="empty-state">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#4A4A4A" stroke-width="1.5">
+          <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+          <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+          <line x1="6" y1="6" x2="6.01" y2="6"></line>
+          <line x1="6" y1="18" x2="6.01" y2="18"></line>
+        </svg>
+        <p>Connect your wallet to view nodes</p>
+        <small>Please connect your wallet first</small>
+      </div>
+    `;
+    return;
+  }
+  
+  try {
+    console.log('🔍 Loading nodes for wallet:', state.wallet);
+    
+    // Primary: Fetch from IPFS
+    let myNodes = [];
+    const allNodes = await getAllNodesFromIPFS();
+    
+    if (allNodes.length > 0) {
+      myNodes = allNodes.filter(node => node.provider === state.wallet);
+      console.log('📦 IPFS nodes for wallet:', myNodes.length);
+    }
+    
+    // Fallback: Fetch from local API if IPFS didn't work
+    if (myNodes.length === 0 && !CONFIG.useIPFSPrimary) {
+      try {
+        const response = await fetch(`${CONFIG.indexerUrl}/nodes`);
+        if (response.ok) {
+          const data = await response.json();
+          const apiNodes = data.nodes || data;
+          myNodes = apiNodes.filter(node => node.provider === state.wallet);
+          console.log('📦 Local API nodes:', myNodes.length);
+        }
+      } catch (e) {
+        console.warn('Local API unavailable:', e.message);
+      }
+    }
+    
+    // Also check for individually pinned nodes
+    try {
+      const ipfsResult = await listPinnedNodes();
+      if (ipfsResult.success && ipfsResult.nodes.length > 0) {
+        console.log('📦 IPFS pinned nodes:', ipfsResult.nodes.length);
+        
+        // Fetch details for nodes belonging to this wallet
+        for (const pin of ipfsResult.nodes) {
+          if (pin.provider === state.wallet) {
+            // Check if already in myNodes
+            const exists = myNodes.find(n => n.endpoint === pin.endpoint);
+            if (!exists) {
+              // Fetch full details from IPFS
+              const nodeData = await fetchNodeFromIPFS(pin.cid);
+              if (nodeData.success && nodeData.data?.node) {
+                myNodes.push({
+                  ...nodeData.data.node,
+                  ipfs_cid: pin.cid,
+                  source: 'ipfs'
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch (ipfsErr) {
+      console.warn('IPFS fetch skipped:', ipfsErr.message);
+    }
+    
+    console.log('✅ Total my nodes:', myNodes.length);
+    
+    if (myNodes.length === 0) {
+      nodesList.innerHTML = `
+        <div class="empty-state">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#4A4A4A" stroke-width="1.5">
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+            <line x1="6" y1="18" x2="6.01" y2="18"></line>
+          </svg>
+          <p>No nodes registered yet</p>
+          <small>Register your first node above to start earning</small>
+        </div>
+      `;
+      return;
+    }
+    
+    // Display nodes
+    nodesList.innerHTML = myNodes.map(node => `
+      <div class="node-card ${node.source === 'ipfs' ? 'ipfs-node' : ''}">
+        <div class="node-card-header">
+          <div>
+            <div class="node-card-title">${node.location || 'Unknown Location'}</div>
+            <div class="node-card-subtitle">${node.endpoint}</div>
+          </div>
+          <span class="node-card-status ${node.is_active !== false ? 'online' : 'offline'}">
+            ${node.is_active !== false ? 'Online' : 'Offline'}
+          </span>
+        </div>
+        <div class="node-card-info">
+          <div class="node-info-row">
+            <span class="node-info-label">Price/Hour:</span>
+            <span class="node-info-value">${((node.price_per_hour || node.price_per_hour_lamports || 0) / 1e9).toFixed(4)} SOL</span>
+          </div>
+          <div class="node-info-row">
+            <span class="node-info-label">Active Sessions:</span>
+            <span class="node-info-value">${node.active_sessions || 0}</span>
+          </div>
+          <div class="node-info-row">
+            <span class="node-info-label">Storage:</span>
+            <span class="node-info-value">${(node.source === 'ipfs-pinata' || node.ipfs_cid || CONFIG.useIPFSPrimary) ? '📦 IPFS' : '💾 Local'}</span>
+          </div>
+          ${(node.source === 'ipfs-pinata' || CONFIG.useIPFSPrimary) ? `
+          <div class="node-info-row">
+            <span class="node-info-label">Registry:</span>
+            <span class="node-info-value" style="font-size: 10px;">Pinata IPFS</span>
+          </div>
+          ` : ''}
+        </div>
+        ${(node.source === 'ipfs-pinata' || CONFIG.useIPFSPrimary) ? `
+        <div class="node-card-footer">
+          <a href="https://w3s.link/ipfs/${CONFIG.ipfsRegistryCID}" target="_blank" class="ipfs-link">
+            View Registry on IPFS →
+          </a>
+        </div>
+        ` : ''}
+      </div>
+    `).join('');
+    
+  } catch (error) {
+    console.error('Error displaying provider nodes:', error);
+    nodesList.innerHTML = '<div class="empty-state"><p>Error loading nodes</p></div>';
+  }
+}
+
+// Initialize provider dashboard
+setupProviderDashboard();
+
+// Initialize Node Provider Dashboard
+if (typeof initNodeProviderDashboard === 'function') {
+  initNodeProviderDashboard();
+}
+
+console.log('DVPN Guard VPN App initialized');

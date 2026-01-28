@@ -1,0 +1,27 @@
+{
+  "name": "dvpn-ipfs-registry",
+  "version": "1.0.0",
+  "description": "Decentralized VPN node registry using IPFS (no database)",
+  "main": "ipfs-registry.js",
+  "scripts": {
+    "start": "node ipfs-registry.js",
+    "daemon": "pm2 start ipfs-registry.js --name dvpn-ipfs-registry"
+  },
+  "keywords": [
+    "dvpn",
+    "ipfs",
+    "decentralized",
+    "vpn",
+    "web3"
+  ],
+  "author": "DVPN Team",
+  "license": "MIT",
+  "dependencies": {
+    "ipfs-core": "^0.18.1",
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "pm2": "^5.3.0"
+  }
+}

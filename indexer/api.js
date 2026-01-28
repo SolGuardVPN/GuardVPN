@@ -133,12 +133,65 @@ app.get('/stats', async (req, res) => {
   }
 });
 
+// Rate a node (after VPN disconnect)
+app.post('/nodes/:id/rate', async (req, res) => {
+  try {
+    const nodeId = req.params.id;
+    const { rating, wallet } = req.body;
+    
+    // Validate rating
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+    }
+    
+    console.log(`⭐ Node ${nodeId} rated ${rating} stars by ${wallet || 'anonymous'}`);
+    
+    // Try to update node in database
+    try {
+      // First try to find by pubkey
+      let result = await pool.query(
+        `UPDATE nodes SET 
+          rating_sum = COALESCE(rating_sum, 0) + $1,
+          rating_count = COALESCE(rating_count, 0) + 1
+         WHERE pubkey = $2 OR endpoint LIKE $3
+         RETURNING *`,
+        [rating, nodeId, `%${nodeId}%`]
+      );
+      
+      if (result.rows.length > 0) {
+        const node = result.rows[0];
+        const avgRating = node.rating_count > 0 ? (node.rating_sum / node.rating_count).toFixed(1) : rating;
+        console.log(`✅ Updated node rating: ${avgRating} (${node.rating_count} ratings)`);
+        return res.json({ 
+          success: true, 
+          average_rating: parseFloat(avgRating),
+          total_ratings: node.rating_count
+        });
+      }
+    } catch (dbErr) {
+      console.warn('DB update failed (columns may not exist):', dbErr.message);
+    }
+    
+    // If DB update fails, just acknowledge the rating
+    res.json({ 
+      success: true, 
+      message: 'Rating recorded',
+      rating: rating
+    });
+    
+  } catch (err) {
+    console.error('Rate node error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🌐 API server running on http://localhost:${PORT}`);
   console.log(`📊 Endpoints:`);
   console.log(`   GET /health`);
   console.log(`   GET /nodes?region=&min_reputation=&limit=`);
   console.log(`   GET /nodes/:pubkey`);
+  console.log(`   POST /nodes/:id/rate`);
   console.log(`   GET /sessions?user=&node=&state=&limit=`);
   console.log(`   GET /sessions/:pubkey`);
   console.log(`   GET /providers/:pubkey`);

@@ -26,7 +26,7 @@ const mockNodes = [
     endpoint: '64.227.150.205:41194',
     region: 'nyc',
     price_per_minute_lamports: 1000000, // 0.001 SOL per minute = 0.06 SOL/hour
-    wg_server_pubkey: 'RZoIubhG01O0f8yesVEwscXWRSZl5JZSCO4Ee1jovQI=',
+    wg_server_pubkey: '8Cb9gEAKpJUWLBPx7s32DYUOIhLPyaFVGsGv93j0nH0=',
     max_capacity: 100,
     active_sessions: 0,
     is_active: true,

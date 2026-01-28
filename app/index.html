@@ -3,155 +3,515 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DVPN Client</title>
+  <title>Guard VPN - Decentralized</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="app-container">
-    <!-- Header -->
-    <header class="header">
-      <div class="logo">
-        <svg width="32" height="32" viewBox="0 0 32 32">
-          <circle cx="16" cy="16" r="14" fill="none" stroke="#00d4aa" stroke-width="2"/>
-          <path d="M16 8 L16 24 M8 16 L24 16" stroke="#00d4aa" stroke-width="2"/>
-        </svg>
-        <h1>DVPN</h1>
+    <!-- Sidebar (Hidden on Onboarding/Subscription screens) -->
+    <aside class="sidebar">
+      <div class="logo-container">
+        <div class="logo-icon">
+          <svg width="50" height="50" viewBox="0 0 513 513" fill="none">
+            <rect width="512" height="512" rx="68" fill="#1EFFAA"/>
+            <path d="M310.119 257.956C311.464 264.009 313.482 270.061 314.827 276.114C322.225 305.706 329.623 334.625 337.021 364.217C337.693 366.234 337.021 366.907 335.676 368.252C308.102 383.047 278.51 390.445 246.901 388.427C222.017 387.082 199.824 379.012 177.63 367.579C175.613 366.906 176.284 365.561 176.284 364.217C182.337 338.66 189.063 313.776 195.115 288.219C197.133 278.132 199.824 268.044 202.514 257.956C220 263.336 238.158 265.353 256.317 265.353C274.475 265.353 291.961 263.336 310.119 257.956ZM384.787 323.864C388.15 331.934 391.513 340.005 394.203 348.075C395.548 350.765 394.203 354.128 392.186 356.818C383.443 368.251 372.682 376.994 360.576 384.392C356.541 386.41 352.507 385.065 351.161 380.357C348.471 368.924 345.108 357.491 342.418 346.73C342.418 346.058 343.09 344.713 343.763 344.713C357.886 337.315 371.337 330.589 384.787 323.864ZM167.567 344.04C168.239 344.712 168.911 346.058 168.911 346.73L160.841 379.011C159.496 385.064 155.461 386.41 150.753 383.719C138.648 376.994 128.56 368.251 119.817 357.491C117.127 354.801 116.454 351.438 117.799 348.075C120.489 340.005 123.851 331.934 127.214 323.864C140.665 330.589 154.116 337.314 167.567 344.04ZM144.027 280.822C146.717 282.167 148.735 282.839 150.752 284.184C160.168 288.892 168.911 293.6 178.326 297.635C179.671 298.308 180.344 298.98 179.671 300.998C177.654 311.758 174.964 322.519 172.274 334.625C158.823 327.899 145.372 321.174 131.248 313.776C135.956 302.343 139.991 291.582 144.027 280.822ZM367.976 280.822C372.684 291.583 376.719 303.016 380.754 313.776C367.304 320.501 353.853 327.227 339.73 334.625C337.712 325.882 335.022 317.138 333.004 308.395C332.332 305.033 330.315 301.671 331.659 299.653C333.004 297.635 337.04 296.29 339.73 294.945C347.8 290.91 356.543 286.875 364.614 282.84C365.958 281.495 366.631 280.822 367.976 280.822ZM351.141 238.452C355.176 248.54 359.212 259.3 363.919 270.733C351.814 276.786 340.38 282.167 328.275 288.219C326.257 280.822 324.24 273.424 322.895 266.026C322.222 262.663 321.55 259.973 320.877 256.61C320.877 255.938 320.877 254.593 321.549 253.921C330.965 248.54 341.053 243.16 351.141 238.452ZM160.827 238.452C170.915 243.832 180.331 248.54 190.419 253.248C191.092 253.248 191.764 254.593 191.764 255.265L183.694 287.547C171.588 282.166 160.155 276.113 148.049 270.733C152.757 259.3 156.792 248.54 160.827 238.452ZM148.729 123.448C150.074 130.846 151.419 138.244 153.437 145.642C160.162 169.853 171.595 191.375 191.099 207.515C208.585 221.638 228.088 228.364 250.281 229.037C266.422 229.709 281.891 227.691 297.36 221.638C320.226 211.55 336.366 194.737 347.799 173.216C355.197 158.42 359.905 143.624 362.595 127.483C362.595 126.811 363.268 125.466 363.268 124.121C376.046 128.829 388.152 133.537 394.877 145.642C397.567 149.678 397.567 155.058 396.222 159.765C392.187 176.579 383.443 190.029 372.683 202.807C348.472 231.054 317.535 248.54 280.546 252.575C249.61 255.938 218.673 254.593 189.754 241.142C158.818 227.019 135.278 204.152 120.483 173.216C118.465 168.508 117.12 163.128 115.775 157.748C113.757 150.35 116.447 144.297 121.155 138.917C128.552 130.846 138.641 126.811 148.729 123.448ZM294.648 162.456C302.046 163.801 320.876 175.234 328.947 183.304C300.027 227.019 217.978 231.726 183.679 183.976C190.404 176.578 209.908 164.473 217.979 162.456C217.979 174.561 222.687 185.322 232.775 192.719C239.5 198.1 247.57 200.79 256.986 200.79C273.799 200.79 293.975 187.339 294.648 162.456ZM256.324 136.899C271.793 136.899 283.226 149.005 283.226 164.473C283.226 178.596 271.12 190.702 256.324 190.702C240.856 190.702 229.423 179.269 229.423 163.801C229.423 148.332 240.856 136.899 256.324 136.899Z" fill="url(#sidebarLogoGrad)"/>
+            <defs>
+              <linearGradient id="sidebarLogoGrad" x1="256" y1="123" x2="256" y2="389" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#000"/>
+                <stop offset="1" stop-color="#181818"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <span class="logo-text">Guard VPN</span>
       </div>
-      <div class="wallet-section">
-        <button id="connectWalletBtn" class="btn btn-primary">Connect Wallet</button>
-        <div id="walletInfo" class="wallet-info" style="display: none;">
-          <span id="walletAddress"></span>
-          <span id="walletBalance"></span>
+      
+      <nav class="nav-menu">
+        <a href="#" class="nav-item active" data-tab="home">
+          <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+          <span class="nav-text">Home</span>
+        </a>
+        <a href="#" class="nav-item" data-tab="sessions">
+          <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span class="nav-text">Sessions</span>
+        </a>
+        <!-- Settings Tab - Commented out for future use
+        <a href="#" class="nav-item" data-tab="settings">
+          <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M12 1v6m0 6v6M1 12h6m6 0h6"></path>
+          </svg>
+          <span class="nav-text">Settings</span>
+        </a>
+        -->
+        <a href="#" class="nav-item" data-tab="provider">
+          <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+            <line x1="6" y1="18" x2="6.01" y2="18"></line>
+          </svg>
+          <span class="nav-text">Provider</span>
+        </a>
+      </nav>
+
+      <div class="wallet-info-sidebar">
+        <div class="wallet-label">Wallet</div>
+        <div class="wallet-address" id="sidebarWalletAddress">Not Connected</div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content-wrapper">
+      <!-- Onboarding Tab -->
+      <div id="onboardingTab" class="tab-content active">
+        <div class="onboarding-container">
+          <div class="welcome-header">
+            <div class="welcome-logo">
+              <svg width="80" height="80" viewBox="0 0 513 513" fill="none">
+                <rect width="512" height="512" rx="68" fill="#1EFFAA"/>
+                <path d="M310.119 257.956C311.464 264.009 313.482 270.061 314.827 276.114C322.225 305.706 329.623 334.625 337.021 364.217C337.693 366.234 337.021 366.907 335.676 368.252C308.102 383.047 278.51 390.445 246.901 388.427C222.017 387.082 199.824 379.012 177.63 367.579C175.613 366.906 176.284 365.561 176.284 364.217C182.337 338.66 189.063 313.776 195.115 288.219C197.133 278.132 199.824 268.044 202.514 257.956C220 263.336 238.158 265.353 256.317 265.353C274.475 265.353 291.961 263.336 310.119 257.956ZM384.787 323.864C388.15 331.934 391.513 340.005 394.203 348.075C395.548 350.765 394.203 354.128 392.186 356.818C383.443 368.251 372.682 376.994 360.576 384.392C356.541 386.41 352.507 385.065 351.161 380.357C348.471 368.924 345.108 357.491 342.418 346.73C342.418 346.058 343.09 344.713 343.763 344.713C357.886 337.315 371.337 330.589 384.787 323.864ZM167.567 344.04C168.239 344.712 168.911 346.058 168.911 346.73L160.841 379.011C159.496 385.064 155.461 386.41 150.753 383.719C138.648 376.994 128.56 368.251 119.817 357.491C117.127 354.801 116.454 351.438 117.799 348.075C120.489 340.005 123.851 331.934 127.214 323.864C140.665 330.589 154.116 337.314 167.567 344.04ZM144.027 280.822C146.717 282.167 148.735 282.839 150.752 284.184C160.168 288.892 168.911 293.6 178.326 297.635C179.671 298.308 180.344 298.98 179.671 300.998C177.654 311.758 174.964 322.519 172.274 334.625C158.823 327.899 145.372 321.174 131.248 313.776C135.956 302.343 139.991 291.582 144.027 280.822ZM367.976 280.822C372.684 291.583 376.719 303.016 380.754 313.776C367.304 320.501 353.853 327.227 339.73 334.625C337.712 325.882 335.022 317.138 333.004 308.395C332.332 305.033 330.315 301.671 331.659 299.653C333.004 297.635 337.04 296.29 339.73 294.945C347.8 290.91 356.543 286.875 364.614 282.84C365.958 281.495 366.631 280.822 367.976 280.822ZM351.141 238.452C355.176 248.54 359.212 259.3 363.919 270.733C351.814 276.786 340.38 282.167 328.275 288.219C326.257 280.822 324.24 273.424 322.895 266.026C322.222 262.663 321.55 259.973 320.877 256.61C320.877 255.938 320.877 254.593 321.549 253.921C330.965 248.54 341.053 243.16 351.141 238.452ZM160.827 238.452C170.915 243.832 180.331 248.54 190.419 253.248C191.092 253.248 191.764 254.593 191.764 255.265L183.694 287.547C171.588 282.166 160.155 276.113 148.049 270.733C152.757 259.3 156.792 248.54 160.827 238.452ZM148.729 123.448C150.074 130.846 151.419 138.244 153.437 145.642C160.162 169.853 171.595 191.375 191.099 207.515C208.585 221.638 228.088 228.364 250.281 229.037C266.422 229.709 281.891 227.691 297.36 221.638C320.226 211.55 336.366 194.737 347.799 173.216C355.197 158.42 359.905 143.624 362.595 127.483C362.595 126.811 363.268 125.466 363.268 124.121C376.046 128.829 388.152 133.537 394.877 145.642C397.567 149.678 397.567 155.058 396.222 159.765C392.187 176.579 383.443 190.029 372.683 202.807C348.472 231.054 317.535 248.54 280.546 252.575C249.61 255.938 218.673 254.593 189.754 241.142C158.818 227.019 135.278 204.152 120.483 173.216C118.465 168.508 117.12 163.128 115.775 157.748C113.757 150.35 116.447 144.297 121.155 138.917C128.552 130.846 138.641 126.811 148.729 123.448ZM294.648 162.456C302.046 163.801 320.876 175.234 328.947 183.304C300.027 227.019 217.978 231.726 183.679 183.976C190.404 176.578 209.908 164.473 217.979 162.456C217.979 174.561 222.687 185.322 232.775 192.719C239.5 198.1 247.57 200.79 256.986 200.79C273.799 200.79 293.975 187.339 294.648 162.456ZM256.324 136.899C271.793 136.899 283.226 149.005 283.226 164.473C283.226 178.596 271.12 190.702 256.324 190.702C240.856 190.702 229.423 179.269 229.423 163.801C229.423 148.332 240.856 136.899 256.324 136.899Z" fill="url(#welcomeLogoGrad)"/>
+                <defs>
+                  <linearGradient id="welcomeLogoGrad" x1="256" y1="123" x2="256" y2="389" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#000"/>
+                    <stop offset="1" stop-color="#181818"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+            <h1 class="welcome-title">Welcome to Guard VPN</h1>
+            <p class="welcome-subtitle">Connect your wallet to get started</p>
+          </div>
+          
+          <div class="wallet-options">
+            <button class="wallet-option-card" id="connectPhantomBtn">
+              <div class="wallet-option-icon phantom-icon">
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                  <rect width="48" height="48" rx="12" fill="#AB9FF2"/>
+                  <path d="M24 14L24 20L30 23L24 32L18 23L24 20Z" stroke="white" stroke-width="2" fill="none"/>
+                </svg>
+              </div>
+              <div class="wallet-option-info">
+                <div class="wallet-option-title">Phantom Wallet</div>
+                <div class="wallet-option-desc">Connect with Phantom <span class="network-tag mainnet">🟢 Mainnet</span></div>
+              </div>
+            </button>
+            
+            <button class="wallet-option-card" id="useMockWalletBtn">
+              <div class="wallet-option-icon dev-icon">
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                  <rect width="48" height="48" rx="12" fill="#FFC107"/>
+                  <path d="M24 16v16M16 24h16" stroke="#0A0A0A" stroke-width="3"/>
+                </svg>
+              </div>
+              <div class="wallet-option-info">
+                <div class="wallet-option-title">Dev Mode</div>
+                <div class="wallet-option-desc">Test wallet for development <span class="network-tag testnet">🧪 Devnet</span></div>
+              </div>
+            </button>
+          </div>
         </div>
       </div>
-    </header>
 
-    <!-- Main Content -->
-    <main class="main-content">
-      <!-- Connection Status -->
-      <section class="status-card">
-        <div class="status-indicator" id="statusIndicator">
-          <div class="status-dot disconnected"></div>
-          <span id="statusText">Disconnected</span>
+      <!-- Subscription Tab -->
+      <div id="subscriptionTab" class="tab-content">
+        <div class="subscription-container">
+          <div class="subscription-header">
+            <div class="subscription-logo">
+              <svg width="60" height="60" viewBox="0 0 513 513" fill="none">
+                <rect width="512" height="512" rx="68" fill="#1EFFAA"/>
+                <path d="M310.119 257.956C311.464 264.009 313.482 270.061 314.827 276.114C322.225 305.706 329.623 334.625 337.021 364.217C337.693 366.234 337.021 366.907 335.676 368.252C308.102 383.047 278.51 390.445 246.901 388.427C222.017 387.082 199.824 379.012 177.63 367.579C175.613 366.906 176.284 365.561 176.284 364.217C182.337 338.66 189.063 313.776 195.115 288.219C197.133 278.132 199.824 268.044 202.514 257.956C220 263.336 238.158 265.353 256.317 265.353C274.475 265.353 291.961 263.336 310.119 257.956ZM384.787 323.864C388.15 331.934 391.513 340.005 394.203 348.075C395.548 350.765 394.203 354.128 392.186 356.818C383.443 368.251 372.682 376.994 360.576 384.392C356.541 386.41 352.507 385.065 351.161 380.357C348.471 368.924 345.108 357.491 342.418 346.73C342.418 346.058 343.09 344.713 343.763 344.713C357.886 337.315 371.337 330.589 384.787 323.864ZM167.567 344.04C168.239 344.712 168.911 346.058 168.911 346.73L160.841 379.011C159.496 385.064 155.461 386.41 150.753 383.719C138.648 376.994 128.56 368.251 119.817 357.491C117.127 354.801 116.454 351.438 117.799 348.075C120.489 340.005 123.851 331.934 127.214 323.864C140.665 330.589 154.116 337.314 167.567 344.04ZM144.027 280.822C146.717 282.167 148.735 282.839 150.752 284.184C160.168 288.892 168.911 293.6 178.326 297.635C179.671 298.308 180.344 298.98 179.671 300.998C177.654 311.758 174.964 322.519 172.274 334.625C158.823 327.899 145.372 321.174 131.248 313.776C135.956 302.343 139.991 291.582 144.027 280.822ZM367.976 280.822C372.684 291.583 376.719 303.016 380.754 313.776C367.304 320.501 353.853 327.227 339.73 334.625C337.712 325.882 335.022 317.138 333.004 308.395C332.332 305.033 330.315 301.671 331.659 299.653C333.004 297.635 337.04 296.29 339.73 294.945C347.8 290.91 356.543 286.875 364.614 282.84C365.958 281.495 366.631 280.822 367.976 280.822ZM351.141 238.452C355.176 248.54 359.212 259.3 363.919 270.733C351.814 276.786 340.38 282.167 328.275 288.219C326.257 280.822 324.24 273.424 322.895 266.026C322.222 262.663 321.55 259.973 320.877 256.61C320.877 255.938 320.877 254.593 321.549 253.921C330.965 248.54 341.053 243.16 351.141 238.452ZM160.827 238.452C170.915 243.832 180.331 248.54 190.419 253.248C191.092 253.248 191.764 254.593 191.764 255.265L183.694 287.547C171.588 282.166 160.155 276.113 148.049 270.733C152.757 259.3 156.792 248.54 160.827 238.452ZM148.729 123.448C150.074 130.846 151.419 138.244 153.437 145.642C160.162 169.853 171.595 191.375 191.099 207.515C208.585 221.638 228.088 228.364 250.281 229.037C266.422 229.709 281.891 227.691 297.36 221.638C320.226 211.55 336.366 194.737 347.799 173.216C355.197 158.42 359.905 143.624 362.595 127.483C362.595 126.811 363.268 125.466 363.268 124.121C376.046 128.829 388.152 133.537 394.877 145.642C397.567 149.678 397.567 155.058 396.222 159.765C392.187 176.579 383.443 190.029 372.683 202.807C348.472 231.054 317.535 248.54 280.546 252.575C249.61 255.938 218.673 254.593 189.754 241.142C158.818 227.019 135.278 204.152 120.483 173.216C118.465 168.508 117.12 163.128 115.775 157.748C113.757 150.35 116.447 144.297 121.155 138.917C128.552 130.846 138.641 126.811 148.729 123.448ZM294.648 162.456C302.046 163.801 320.876 175.234 328.947 183.304C300.027 227.019 217.978 231.726 183.679 183.976C190.404 176.578 209.908 164.473 217.979 162.456C217.979 174.561 222.687 185.322 232.775 192.719C239.5 198.1 247.57 200.79 256.986 200.79C273.799 200.79 293.975 187.339 294.648 162.456ZM256.324 136.899C271.793 136.899 283.226 149.005 283.226 164.473C283.226 178.596 271.12 190.702 256.324 190.702C240.856 190.702 229.423 179.269 229.423 163.801C229.423 148.332 240.856 136.899 256.324 136.899Z" fill="url(#subLogoGrad)"/>
+                <defs>
+                  <linearGradient id="subLogoGrad" x1="256" y1="123" x2="256" y2="389" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#000"/>
+                    <stop offset="1" stop-color="#181818"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+            <h1 class="subscription-title">Choose Your Plan</h1>
+            <p class="subscription-subtitle">Unlock unlimited VPN access</p>
+          </div>
+          
+          <!-- Subscription Code Section -->
+          <div class="code-section">
+            <div class="code-header">
+              <span class="code-label">Have a subscription code?</span>
+            </div>
+            <div class="code-input-wrapper">
+              <input type="text" id="subscriptionCodeInput" placeholder="Enter your code (e.g., DVPN-XXXX-XXXX)" class="code-input">
+              <button class="btn-apply-code" id="applyCodeBtn">Apply</button>
+            </div>
+            <div class="code-message" id="codeMessage"></div>
+          </div>
+          
+          <div class="divider-or">
+            <span>OR</span>
+          </div>
+          
+          <!-- Plans Section -->
+          <div class="plans-grid-new">
+            <div class="plan-card-new" data-plan="weekly">
+              <div class="plan-header-new">
+                <div class="plan-icon-new">⚡</div>
+                <div class="plan-badge-new">Weekly</div>
+              </div>
+              <div class="plan-price-new">
+                <span class="price-amount">0.03</span>
+                <span class="price-currency">SOL</span>
+              </div>
+              <div class="plan-period-new">per week</div>
+              <ul class="plan-features">
+                <li>✓ Unlimited bandwidth</li>
+                <li>✓ All server locations</li>
+                <li>✓ On-chain escrow</li>
+              </ul>
+              <button class="btn-subscribe" onclick="subscribePlan('weekly', 0.03)">
+                Subscribe Weekly
+              </button>
+            </div>
+            
+            <div class="plan-card-new" data-plan="monthly">
+              <div class="plan-header-new">
+                <div class="plan-icon-new">📅</div>
+                <div class="plan-badge-new">Monthly</div>
+              </div>
+              <div class="plan-price-new">
+                <span class="price-amount">0.1</span>
+                <span class="price-currency">SOL</span>
+              </div>
+              <div class="plan-period-new">per month</div>
+              <ul class="plan-features">
+                <li>✓ Unlimited bandwidth</li>
+                <li>✓ All server locations</li>
+                <li>✓ 25% cheaper than weekly</li>
+              </ul>
+              <button class="btn-subscribe" onclick="subscribePlan('monthly', 0.1)">
+                Subscribe Monthly
+              </button>
+            </div>
+            
+            <div class="plan-card-new plan-recommended-new" data-plan="yearly">
+              <div class="plan-save-badge">Best Value 🔥</div>
+              <div class="plan-header-new">
+                <div class="plan-icon-new">🎯</div>
+                <div class="plan-badge-new">Yearly</div>
+              </div>
+              <div class="plan-price-new">
+                <span class="price-amount">0.6</span>
+                <span class="price-currency">SOL</span>
+              </div>
+              <div class="plan-period-new">per year</div>
+              <ul class="plan-features">
+                <li>✓ Everything included</li>
+                <li>✓ Priority support</li>
+                <li>✓ 50% discount</li>
+              </ul>
+              <button class="btn-subscribe btn-subscribe-primary" onclick="subscribePlan('yearly', 0.6)">
+                Subscribe Yearly
+              </button>
+            </div>
+          </div>
+          
+          <div class="escrow-info">
+            <span class="escrow-icon">🔐</span>
+            <span>Payments are secured in smart contract escrow. Cancel anytime for proportional refund.</span>
+          </div>
+          
+          <div class="wallet-connected-info" id="subscriptionWalletInfo">
+            <span class="wallet-dot"></span>
+            <span id="subscriptionWalletAddress">Wallet Connected</span>
+          </div>
         </div>
-        <button id="connectBtn" class="btn btn-large btn-connect" disabled>
-          Connect to VPN
-        </button>
-        <div id="connectionDetails" style="display: none;">
-          <div class="detail-row">
-            <span class="label">Node:</span>
-            <span id="connectedNode">-</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">Region:</span>
-            <span id="connectedRegion">-</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">Session:</span>
-            <span id="sessionId">-</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">Time Remaining:</span>
-            <span id="timeRemaining">-</span>
-          </div>
-        </div>
-      </section>
+      </div>
 
-      <!-- Node Selection -->
-      <section class="nodes-section">
-        <div class="section-header">
-          <h2>Available Nodes</h2>
-          <div class="filters">
-            <select id="regionFilter" class="filter-select">
-              <option value="">All Regions</option>
-              <option value="us-east">US East</option>
-              <option value="us-west">US West</option>
-              <option value="eu-west">EU West</option>
-              <option value="asia">Asia</option>
-            </select>
-            <button id="refreshNodesBtn" class="btn btn-secondary">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
-                <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+      <!-- Home Tab -->
+      <div id="homeTab" class="tab-content main-dashboard">
+        <!-- Left Panel - Locations -->
+        <div class="locations-panel">
+          <div class="locations-header">
+            <span>All Locations</span>
+            <button class="btn-refresh-inline" id="refreshNodesBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
               </svg>
               Refresh
             </button>
           </div>
+          
+          <div class="search-container">
+            <!-- <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg> -->
+            <input type="text" id="searchLocation" placeholder="Search location" class="search-input">
+          </div>
+          
+          <div class="locations-list" id="locationsList">
+            <!-- Locations will be populated dynamically -->
+          </div>
         </div>
-        <div id="nodesContainer" class="nodes-grid">
-          <div class="loading">Loading nodes...</div>
+
+        <!-- Center Panel - Empty Space -->
+        <div class="center-spacer"></div>
+
+        <!-- Right Panel - Connection -->
+        <div class="connection-panel">
+          <div class="current-location" id="currentLocationCard">
+            <div class="location-icon">🌍</div>
+            <div class="location-info">
+              <div class="location-title">Select Node</div>
+              <div class="location-subtitle">Choose a location</div>
+            </div>
+            <svg class="location-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </div>
+          
+          <div class="timer" id="connectionTimer">00:00:00</div>
+          
+          <div class="connection-status" id="connectionStatus">
+            <button class="status-circle disconnected" id="statusCircle">
+              <svg class="power-icon" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                <line x1="12" y1="2" x2="12" y2="12"></line>
+              </svg>
+              <div class="status-text" id="statusText">Disconnected</div>
+              <div class="status-ip" id="statusIp">---</div>
+            </button>
+          </div>
+          
+          <div class="speed-stats">
+            <div class="speed-item">
+              <svg class="speed-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00D4AA" stroke-width="2">
+                <path d="M12 5v14M19 12l-7 7-7-7"></path>
+              </svg>
+              <div class="speed-label">DOWNLOAD</div>
+              <div class="speed-value" id="downloadSpeed">0.00/Mbps</div>
+            </div>
+            <div class="speed-item">
+              <svg class="speed-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00D4AA" stroke-width="2">
+                <path d="M12 19V5M5 12l7-7 7 7"></path>
+              </svg>
+              <div class="speed-label">UPLOAD</div>
+              <div class="speed-value" id="uploadSpeed">0.00/Mbps</div>
+            </div>
+          </div>
         </div>
-      </section>
+      </div>
 
       <!-- Sessions Tab -->
-      <section class="sessions-section" style="display: none;">
-        <h2>My Sessions</h2>
-        <div id="sessionsContainer" class="sessions-list">
-          <!-- Sessions will be populated here -->
+      <div id="sessionsTab" class="tab-content">
+        <div class="tab-with-sidebar">
+          <div class="sidebar-placeholder"></div>
+          <div class="tab-main-content">
+            <div class="tab-header">
+              <h2>Session History</h2>
+              <button class="btn-refresh" id="refreshSessionsBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+                Refresh
+              </button>
+            </div>
+            
+            <div class="sessions-list" id="sessionsList">
+              <div class="empty-state">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#4A4A4A" stroke-width="1.5">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <p>No session history yet</p>
+                <small>Your VPN sessions will appear here</small>
+              </div>
+            </div>
+          </div>
         </div>
-      </section>
+      </div>
 
-      <!-- Settings Tab -->
-      <section class="settings-section" style="display: none;">
-        <h2>Settings</h2>
-        <div class="settings-form">
-          <div class="form-group">
-            <label for="indexerUrl">Indexer URL:</label>
-            <input type="text" id="indexerUrl" value="http://localhost:8080" class="input">
+      <!-- Settings Tab - Commented out for future use
+      <div id="settingsTab" class="tab-content">
+        <div class="tab-with-sidebar">
+          <div class="sidebar-placeholder"></div>
+          <div class="tab-main-content">
+            <div class="tab-header">
+              <h2>Settings</h2>
+            </div>
+            
+            <div class="settings-grid">
+              <div class="settings-section">
+                <h3 class="settings-section-title">Network Configuration</h3>
+                
+                <div class="form-group">
+                  <label for="indexerUrl">Indexer URL</label>
+                  <input type="text" id="indexerUrl" class="input-field" value="http://localhost:3001">
+                  <small class="input-hint">API endpoint for node discovery</small>
+                </div>
+                
+                <div class="form-group">
+                  <label for="rpcUrl">Solana RPC URL</label>
+                  <input type="text" id="rpcUrl" class="input-field" value="https://api.testnet.solana.com">
+                  <small class="input-hint">Blockchain RPC endpoint</small>
+                </div>
+                
+                <div class="form-group">
+                  <label for="programId">Program ID</label>
+                  <input type="text" id="programId" class="input-field" value="8LQKwvHJPdK6fKmopXmUwct8JjVGQhf3RFQd64nCV39i">
+                  <small class="input-hint">Smart contract address</small>
+                </div>
+              </div>
+              
+              <div class="settings-section">
+                <h3 class="settings-section-title">Wallet</h3>
+                
+                <div class="wallet-status-card">
+                  <div class="wallet-status-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                      <line x1="1" y1="10" x2="23" y2="10"></line>
+                    </svg>
+                  </div>
+                  <div class="wallet-status-info">
+                    <div class="wallet-status-label">Connected Wallet</div>
+                    <div class="wallet-status-address" id="settingsWalletAddress">Not Connected</div>
+                  </div>
+                  <button class="btn-secondary" id="connectWalletBtn">Connect</button>
+                </div>
+              </div>
+              
+              <div class="settings-actions">
+                <button class="btn-primary" id="saveSettingsBtn">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                    <polyline points="7 3 7 8 15 8"></polyline>
+                  </svg>
+                  Save Settings
+                </button>
+              </div>
+            </div>
           </div>
-          <div class="form-group">
-            <label for="rpcUrl">Solana RPC URL:</label>
-            <input type="text" id="rpcUrl" value="http://localhost:8899" class="input">
-          </div>
-          <div class="form-group">
-            <label for="programId">Program ID:</label>
-            <input type="text" id="programId" value="8LQKwvHJPdK6fKmopXmUwct8JjVGQhf3RFQd64nCV39i" class="input">
-          </div>
-          <button id="saveSettingsBtn" class="btn btn-primary">Save Settings</button>
         </div>
-      </section>
+      </div>
+      End Settings Tab -->
+
+      <!-- Provider Tab -->
+      <div id="providerTab" class="tab-content">
+        <div class="tab-with-sidebar">
+          <div class="sidebar-placeholder"></div>
+          <div class="tab-main-content">
+            <div class="tab-header">
+              <h2>Node Provider Dashboard</h2>
+              <button class="btn-refresh" id="refreshProviderStatsBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+                Refresh
+              </button>
+            </div>
+            
+            <div class="provider-stats-grid">
+              <div class="stat-card" id="nodeStatusCard">
+                <div class="stat-icon">🟢</div>
+                <div class="stat-value" id="nodeOnlineStatus">Online</div>
+                <div class="stat-label">Node Status</div>
+              </div>
+              
+              <div class="stat-card">
+                <div class="stat-icon">👥</div>
+                <div class="stat-value" id="providerActiveUsers">0</div>
+                <div class="stat-label">Active Users</div>
+              </div>
+              
+              <div class="stat-card">
+                <div class="stat-icon">💰</div>
+                <div class="stat-value" id="providerEarnings">0 SOL</div>
+                <div class="stat-label">Pending Earnings</div>
+                <button class="btn-claim" id="claimEarningsBtn" title="On-chain claiming requires program deployment">
+                  Withdraw
+                </button>
+              </div>
+              
+              <div class="stat-card">
+                <div class="stat-icon">⚡</div>
+                <div class="stat-value" id="providerUptime">0%</div>
+                <div class="stat-label">Uptime</div>
+              </div>
+              
+              <div class="stat-card">
+                <div class="stat-icon">📊</div>
+                <div class="stat-value" id="providerSessions">0</div>
+                <div class="stat-label">Total Sessions</div>
+              </div>
+            </div>
+            
+            <div class="provider-node-form">
+              <h3 class="form-title">Register Your Node</h3>
+              
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="providerNodeLocation">Location</label>
+                  <input type="text" id="providerNodeLocation" class="input-field" placeholder="e.g., New York, USA">
+                </div>
+                
+                <div class="form-group">
+                  <label for="providerNodeEndpoint">Endpoint (IP:Port)</label>
+                  <input type="text" id="providerNodeEndpoint" class="input-field" placeholder="e.g., 192.168.1.100:51820">
+                </div>
+              </div>
+              
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="providerNodePrice">Price (SOL/hour)</label>
+                  <input type="number" id="providerNodePrice" class="input-field" placeholder="0.01" step="0.01" min="0">
+                </div>
+                
+                <div class="form-group">
+                  <label for="providerNodePubkey">WireGuard Public Key</label>
+                  <input type="text" id="providerNodePubkey" class="input-field" placeholder="Your WireGuard public key">
+                </div>
+              </div>
+              
+              <button class="btn-primary btn-large" id="registerNodeBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 5v14M5 12h14"></path>
+                </svg>
+                Register Node
+              </button>
+            </div>
+            
+            <div class="provider-nodes-list">
+              <h3 class="list-title">Your Registered Nodes</h3>
+              <div id="providerNodesList" class="nodes-grid">
+                <div class="empty-state">
+                  <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#4A4A4A" stroke-width="1.5">
+                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                    <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                    <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                  </svg>
+                  <p>No nodes registered yet</p>
+                  <small>Register your first node to start earning</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
-
-    <!-- Navigation -->
-    <nav class="bottom-nav">
-      <button class="nav-item active" data-tab="nodes">
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-          <circle cx="10" cy="10" r="8"/>
-        </svg>
-        Nodes
-      </button>
-      <button class="nav-item" data-tab="sessions">
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-          <rect x="2" y="4" width="16" height="12" rx="2"/>
-        </svg>
-        Sessions
-      </button>
-      <button class="nav-item" data-tab="settings">
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-          <circle cx="10" cy="10" r="2"/>
-          <path d="M10 2L12 6L16 6L13 9L14 13L10 11L6 13L7 9L4 6L8 6Z"/>
-        </svg>
-        Settings
-      </button>
-    </nav>
   </div>
 
-  <!-- Modals -->
-  <div id="modalOverlay" class="modal-overlay" style="display: none;">
-    <div class="modal">
-      <div class="modal-header">
-        <h3 id="modalTitle">Modal Title</h3>
-        <button class="modal-close">&times;</button>
-      </div>
-      <div class="modal-body" id="modalBody">
-        <!-- Dynamic content -->
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" id="modalCancelBtn">Cancel</button>
-        <button class="btn btn-primary" id="modalConfirmBtn">Confirm</button>
-      </div>
-    </div>
-  </div>
+  <!-- Toast Notification -->
+  <div id="toast" class="toast"></div>
 
   <script src="renderer.js"></script>
 </body>

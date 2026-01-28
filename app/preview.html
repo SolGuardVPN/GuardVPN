@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guard VPN - Decentralized (Preview)</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo-container">
+        <div class="logo-icon">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+            <rect width="40" height="40" rx="8" fill="#00D4AA"/>
+            <path d="M20 10 L20 18 L28 22 L20 30 L12 22 L20 18 Z" stroke="#0A0A0A" stroke-width="2" fill="none"/>
+          </svg>
+        </div>
+        <span class="logo-text">Guard VPN</span>
+      </div>
+      
+      <nav class="nav-menu">
+        <a href="#" class="nav-item active" data-tab="home">
+          <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+          <span class="nav-text">Home</span>
+        </a>
+        <a href="#" class="nav-item" data-tab="history">
+          <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span class="nav-text">History</span>
+        </a>
+        <a href="#" class="nav-item" data-tab="profile">
+          <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          <span class="nav-text">Profile</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Left Panel - Locations -->
+      <div class="locations-panel">
+        <div class="search-container">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.35-4.35"></path>
+          </svg>
+          <input type="text" id="searchLocation" placeholder="Search location" class="search-input">
+        </div>
+        
+        <div class="locations-header">All Locations</div>
+        
+        <div class="locations-list" id="locationsList">
+          <!-- Locations will be populated dynamically -->
+        </div>
+      </div>
+
+      <!-- Center Panel - Map -->
+      <div class="map-panel">
+        <div class="map-background">
+          <canvas id="mapCanvas" class="world-map-canvas"></canvas>
+          
+          <div class="connection-indicator" id="connectionIndicator">
+            <div class="client-marker" id="clientMarker">
+              <div class="marker-pulse"></div>
+              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                <circle cx="16" cy="16" r="16" fill="#00D4AA"/>
+                <path d="M16 8 L16 14 L22 17 L16 24 L10 17 L16 14 Z" stroke="#0A0A0A" stroke-width="1.5" fill="none"/>
+              </svg>
+            </div>
+            
+            <svg class="connection-line" id="connectionLine">
+              <line x1="0" y1="0" x2="100" y2="100" stroke="#00D4AA" stroke-width="2" stroke-dasharray="8 4"/>
+            </svg>
+            
+            <div class="server-marker" id="serverMarker">
+              <div class="marker-pulse"></div>
+              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                <circle cx="16" cy="16" r="16" fill="#00D4AA"/>
+                <rect x="10" y="12" width="12" height="3" fill="#0A0A0A" rx="1"/>
+                <rect x="10" y="17" width="12" height="3" fill="#0A0A0A" rx="1"/>
+                <circle cx="19" cy="13.5" r="0.8" fill="#00D4AA"/>
+                <circle cx="19" cy="18.5" r="0.8" fill="#00D4AA"/>
+              </svg>
+            </div>
+            
+            <div class="location-popup" id="locationPopup">
+              <span style="font-size: 24px;" id="popupFlag">🇺🇸</span>
+              <div class="popup-info">
+                <div class="popup-country" id="popupCountry">United State</div>
+                <div class="popup-city" id="popupCity">New York</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <button class="btn-premium" id="premiumBtn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+          </svg>
+          Try Premium
+        </button>
+      </div>
+
+      <!-- Right Panel - Connection -->
+      <div class="connection-panel">
+        <div class="current-location" id="currentLocationCard">
+          <span class="location-flag" id="currentFlag">🇺🇸</span>
+          <div class="location-info">
+            <div class="location-country" id="currentCountry">United State</div>
+            <div class="location-city" id="currentCity">New York, United States</div>
+          </div>
+          <svg class="location-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </div>
+        
+        <div class="timer" id="connectionTimer">01:46:08</div>
+        
+        <div class="connection-status" id="connectionStatus">
+          <button class="status-circle disconnected" id="statusCircle">
+            <svg class="power-icon" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+              <line x1="12" y1="2" x2="12" y2="12"></line>
+            </svg>
+            <div class="status-text" id="statusText">Disconnected</div>
+            <div class="status-ip" id="statusIp">100.100.212.32</div>
+          </button>
+        </div>
+        
+        <div class="speed-stats">
+          <div class="speed-item">
+            <svg class="speed-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00D4AA" stroke-width="2">
+              <path d="M12 5v14M19 12l-7 7-7-7"></path>
+            </svg>
+            <div class="speed-label">Download</div>
+            <div class="speed-value" id="downloadSpeed">49.85/Mbps</div>
+          </div>
+          <div class="speed-item">
+            <svg class="speed-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00D4AA" stroke-width="2">
+              <path d="M12 19V5M5 12l7-7 7 7"></path>
+            </svg>
+            <div class="speed-label">Upload</div>
+            <div class="speed-value" id="uploadSpeed">35.74/Mbps</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast"></div>
+
+  <script src="renderer-new.js"></script>
+</body>
+</html>

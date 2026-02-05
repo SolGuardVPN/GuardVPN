@@ -15,8 +15,6 @@ async function main() {
   // Program ID
   const programId = new PublicKey("8LQKwvHJPdK6fKmopXmUwct8JjVGQhf3RFQd64nCV39i");
   
-  console.log("Program ID:", programId.toString());
-  console.log("User wallet:", userWallet.publicKey.toString());
   
   // Provider PDA
   const [providerPda] = await PublicKey.findProgramAddress(
@@ -44,8 +42,6 @@ async function main() {
     programId
   );
   
-  console.log("\n📊 Testing close_session (partial refund)...");
-  console.log("Session PDA:", sessionPda.toString());
   
   // Check session before closing
   const sessionAccountBefore = await connection.getAccountInfo(sessionPda);
@@ -53,7 +49,6 @@ async function main() {
     console.error("❌ Session not found!");
     return;
   }
-  console.log("Session exists with", sessionAccountBefore.lamports, "lamports");
   
   // Get close_session discriminator
   const closeSessionDiscriminator = Buffer.from([68, 114, 178, 140, 222, 38, 248, 211]);
@@ -69,25 +64,19 @@ async function main() {
     data: data,
   });
   
-  console.log("\n🔒 Closing session...");
   
   const transaction = new anchor.web3.Transaction().add(instruction);
   const signature = await provider.sendAndConfirm(transaction);
-  console.log("✅ Session closed! Signature:", signature);
   
   // Check session after closing
   const sessionAccountAfter = await connection.getAccountInfo(sessionPda);
   if (sessionAccountAfter) {
-    console.log("✅ Session account still exists (state updated to Closed)");
   } else {
-    console.log("✅ Session account closed");
   }
   
-  console.log("\n🎉 Close session test complete!");
 }
 
 main().then(() => {
-  console.log("\n✅ Success!");
   process.exit(0);
 }).catch((err) => {
   console.error("❌ Error:", err);

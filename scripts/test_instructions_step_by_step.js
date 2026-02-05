@@ -20,7 +20,6 @@ const colors = {
 };
 
 function log(msg, color = 'reset') {
-  console.log(colors[color] + msg + colors.reset);
 }
 
 async function main() {
@@ -369,8 +368,6 @@ async function main() {
 main().then(() => process.exit(0)).catch((err) => {
   console.error("\n❌ Fatal error:", err.message);
   if (err.logs) {
-    console.log("\nTransaction logs:");
-    err.logs.forEach(log => console.log(log));
   }
   process.exit(1);
 });

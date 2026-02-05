@@ -55,7 +55,6 @@ async function run(){
                 const [p,_] = await PublicKey.findProgramAddress(seeds, programId);
                 count++;
                 if (p.toBase58()===target){
-                  console.log('FOUND', {
                     prefixIndex: pi,
                     prefix: pref.toString(),
                     provVariantIndex: pvi,
@@ -76,7 +75,6 @@ async function run(){
       }
     }
   }
-  console.log('not found after', count, 'tries');
 }
 
 run().catch(e=>{console.error(e); process.exit(1)})

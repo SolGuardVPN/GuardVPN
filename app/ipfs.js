@@ -1,9 +1,9 @@
-// IPFS Module for DVPN Client
+// IPFS Module for GVPN Client
 // Handles IPFS node initialization and node discovery
 
 let ipfs = null;
 let isInitialized = false;
-const NODES_TOPIC = 'dvpn-nodes';
+const NODES_TOPIC = 'gvpn-nodes';
 const nodesCache = new Map();
 
 // Try to load ipfs-core, but make it optional
@@ -20,11 +20,9 @@ async function initIPFS() {
   if (isInitialized) return ipfs;
   
   if (!createIPFS) {
-    console.log('⚠️ IPFS not available, using indexer API only');
     return null;
   }
   
-  console.log('🚀 Initializing IPFS node...');
   
   try {
     ipfs = await createIPFS({
@@ -40,7 +38,6 @@ async function initIPFS() {
     });
     
     const { id } = await ipfs.id();
-    console.log(`✅ IPFS initialized - Peer ID: ${id}`);
     
     isInitialized = true;
     
@@ -56,13 +53,11 @@ async function initIPFS() {
 
 // Subscribe to node announcements via PubSub
 async function subscribeToNodes() {
-  console.log(`📡 Subscribing to ${NODES_TOPIC}...`);
   
   try {
     await ipfs.pubsub.subscribe(NODES_TOPIC, (msg) => {
       try {
         const data = JSON.parse(new TextDecoder().decode(msg.data));
-        console.log(`📨 Received node: ${data.endpoint}`);
         
         nodesCache.set(data.pubkey, {
           ...data,
@@ -81,7 +76,6 @@ async function subscribeToNodes() {
       }
     });
     
-    console.log('✅ Subscribed to node announcements');
   } catch (error) {
     console.error('❌ Failed to subscribe:', error);
   }
@@ -132,7 +126,6 @@ async function stopIPFS() {
   if (ipfs) {
     await ipfs.stop();
     isInitialized = false;
-    console.log('🛑 IPFS node stopped');
   }
 }
 

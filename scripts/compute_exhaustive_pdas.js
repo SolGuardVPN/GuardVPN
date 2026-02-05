@@ -47,13 +47,11 @@ async function run(){
         const [p,_] = await PublicKey.findProgramAddress(seeds, programId);
         count++;
         if (p.toBase58()===target){
-          console.log('FOUND', {pref:pref.toString(), nid, order:orderFn.name, bump: bump? bump[0]:null, provSlice: prov.slice(0,4).toString('hex'), p: p.toBase58(), tried:count});
           return;
         }
       }catch(e){}
     }
   }
-  console.log('not found after', count, 'tries');
 }
 
 run().catch(e=>{console.error(e); process.exit(1)})

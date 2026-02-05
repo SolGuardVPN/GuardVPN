@@ -8,10 +8,7 @@ async function main(){
   const program = new anchor.Program(idl, idl.metadata.address, provider);
 
   const providerPda = new PublicKey('43y5RPkeFTrLz6ECNpKKT5vthuS9ge6WeaJwsi4gUFx7');
-  console.log('fetching provider account:', providerPda.toBase58());
   const prov = await program.account.provider.fetch(providerPda);
-  console.log('decoded provider:');
-  console.log({
     authority: prov.authority.toBase58(),
     node_count: prov.nodeCount?.toString ? prov.nodeCount.toString() : prov.node_count?.toString(),
     bump: prov.bump
@@ -31,8 +28,6 @@ async function main(){
     ], program.programId);
     try{
       const s = await program.account.session.fetch(sessionPda);
-      console.log('found session id', sid, 'pda', sessionPda.toBase58());
-      console.log({
         user: s.user.toBase58(),
         node: s.node.toBase58(),
         session_id: s.sessionId?.toString ? s.sessionId.toString() : s.session_id?.toString(),
@@ -43,7 +38,6 @@ async function main(){
         bump: s.bump
       });
     }catch(e){
-      console.log('no session for id', sid, 'pda', sessionPda.toBase58());
     }
   }
 }

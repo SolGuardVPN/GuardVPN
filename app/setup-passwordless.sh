@@ -41,7 +41,7 @@ echo "Found wg-quick at: $WG_QUICK_PATH"
 
 # Create sudoers entry
 SUDOERS_FILE="/etc/sudoers.d/guard-vpn"
-DVPN_CONF_PATH="$HOME/.dvpn/dvpn.conf"
+GVPN_CONF_PATH="$HOME/.gvpn/gvpn.conf"
 
 echo "Creating sudoers entry..."
 
@@ -67,10 +67,10 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# Create .dvpn directory if it doesn't exist
-DVPN_DIR="/Users/$CURRENT_USER/.dvpn"
-mkdir -p "$DVPN_DIR"
-chown "$CURRENT_USER" "$DVPN_DIR"
+# Create .gvpn directory if it doesn't exist
+GVPN_DIR="/Users/$CURRENT_USER/.gvpn"
+mkdir -p "$GVPN_DIR"
+chown "$CURRENT_USER" "$GVPN_DIR"
 
 echo ""
 echo "========================================="

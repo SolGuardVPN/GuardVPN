@@ -44,9 +44,7 @@ const target = 'EG4d3Y7rmEFvsCjTFWhxY71mDrhZb5NoYx2bqQdhSpfZ';
       const [pda, bump] = await PublicKey.findProgramAddress(s, programId);
       const p = pda.toBase58();
       const label = s.map(x => (Buffer.isBuffer(x) ? x.toString('hex').slice(0,16) : x.toString())).join(' | ');
-      if (p === target) console.log('MATCH seeds:', label, '->', p);
       // otherwise print some for inspection
-      // console.log('seeds:', label, '->', p);
     } catch (e) {
       // ignore
     }

@@ -8,10 +8,7 @@ async function main(){
   const program = new anchor.Program(idl, idl.metadata.address, provider);
 
   const nodePub = new PublicKey('EG4d3Y7rmEFvsCjTFWhxY71mDrhZb5NoYx2bqQdhSpfZ');
-  console.log('fetching node account:', nodePub.toBase58());
   const node = await program.account.node.fetch(nodePub);
-  console.log('decoded node:');
-  console.log({
     provider: node.provider.toBase58(),
     node_id: node.nodeId?.toString ? node.nodeId.toString() : node.node_id?.toString(),
     endpoint: node.endpoint,

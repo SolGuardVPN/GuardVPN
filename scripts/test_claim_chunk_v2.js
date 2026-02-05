@@ -19,8 +19,6 @@ async function main() {
   const programId = new PublicKey(idl.metadata.address);
   const program = new anchor.Program(idl, programId, provider);
   
-  console.log("Program ID:", programId.toString());
-  console.log("Wallet:", wallet.publicKey.toString());
   
   // Get PDAs
   const [providerPda] = await PublicKey.findProgramAddress(
@@ -41,8 +39,6 @@ async function main() {
     programId
   );
   
-  console.log("\\n📡 Creating test session for claim_chunk...");
-  console.log("Session PDA:", sessionPda.toString());
   
   try {
     // Create session with 0.1 SOL escrow
@@ -57,15 +53,12 @@ async function main() {
       })
       .rpc();
     
-    console.log("✅ Session created:", tx1);
     
     // Wait a bit
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     // Now test claim_chunk
-    console.log("\\n💰 Testing claim_chunk (usage-based billing)...");
     const bytesUsed = 50 * 1024 * 1024; // 50 MB
-    console.log("Claiming payment for:", bytesUsed, "bytes (50 MB)");
     
     const tx2 = await program.methods
       .claimChunk(new anchor.BN(bytesUsed))
@@ -77,16 +70,11 @@ async function main() {
       })
       .rpc();
     
-    console.log("✅ Chunk claimed! Signature:", tx2);
     
     // Verify session state
     const sessionAccount = await program.account.session.fetch(sessionPda);
-    console.log("\\n📊 Session state after claim:");
-    console.log("  - Total bytes used:", sessionAccount.bytesUsed.toString());
-    console.log("  - Escrow remaining:", sessionAccount.escrowLamports.toNumber() / LAMPORTS_PER_SOL, "SOL");
     
     // Test multiple claims
-    console.log("\\n🔄 Testing second claim...");
     const tx3 = await program.methods
       .claimChunk(new anchor.BN(25 * 1024 * 1024))
       .accounts({
@@ -97,20 +85,13 @@ async function main() {
       })
       .rpc();
     
-    console.log("✅ Second chunk claimed:", tx3);
     
     const sessionAccount2 = await program.account.session.fetch(sessionPda);
-    console.log("\\n📊 Final session state:");
-    console.log("  - Total bytes used:", sessionAccount2.bytesUsed.toString());
-    console.log("  - Escrow remaining:", sessionAccount2.escrowLamports.toNumber() / LAMPORTS_PER_SOL, "SOL");
     
-    console.log("\\n✅ Usage-based billing test PASSED!");
     
   } catch (err) {
     console.error("❌ Error:", err.message);
     if (err.logs) {
-      console.log("\\nTransaction logs:");
-      err.logs.forEach(log => console.log(log));
     }
   }
 }

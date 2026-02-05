@@ -20,7 +20,6 @@ const pool = new Pool({
 // Logger
 const log = (level, msg, meta) => {
   const out = { ts: new Date().toISOString(), level, msg, ...meta };
-  console.log(JSON.stringify(out));
 };
 
 // Initialize database schema

@@ -22,6 +22,15 @@ class PhantomConnect {
     this.onConnectCallback = null;
     this.pendingTransaction = null;
     this.onTransactionCallback = null;
+    this.pendingNodeRegistration = null;
+    this.onNodeRegistrationCallback = null;
+  }
+
+  /**
+   * Set callback for node registration completion
+   */
+  setOnNodeRegistrationCallback(callback) {
+    this.onNodeRegistrationCallback = callback;
   }
 
   /**
@@ -47,7 +56,6 @@ class PhantomConnect {
     
     // Open the connection page in default browser
     const connectUrl = `http://localhost:${SERVER_PORT}/phantom-connect.html`;
-    console.log('[Phantom] Opening connection page:', connectUrl);
     shell.openExternal(connectUrl);
     
     // Return immediately - result comes via HTTP callback
@@ -59,7 +67,6 @@ class PhantomConnect {
    */
   startServer() {
     if (server) {
-      console.log('[Phantom] Server already running');
       return;
     }
 
@@ -98,6 +105,22 @@ class PhantomConnect {
           res.end(content);
         });
       }
+      // Serve the node registration page
+      else if (url.pathname === '/phantom-register-node.html') {
+        const htmlPath = path.join(__dirname, 'phantom-register-node.html');
+        fs.readFile(htmlPath, (err, content) => {
+          if (err) {
+            res.writeHead(500);
+            res.end('Error loading node registration page');
+            return;
+          }
+          res.writeHead(200, { 
+            'Content-Type': 'text/html',
+            'Access-Control-Allow-Origin': '*'
+          });
+          res.end(content);
+        });
+      }
       // Handle wallet callback
       else if (url.pathname === '/wallet-callback') {
         const publicKey = url.searchParams.get('publicKey');
@@ -106,7 +129,6 @@ class PhantomConnect {
           this.userPublicKey = publicKey;
           this.isConnectedFlag = true;
           
-          console.log('[Phantom] Wallet connected via HTTP callback:', publicKey);
           
           // Notify the main process
           if (this.onConnectCallback) {
@@ -158,7 +180,7 @@ class PhantomConnect {
             <body>
               <div class="container">
                 <h1>✅ Wallet Connected!</h1>
-                <p>You can close this tab and return to the DVPN app.</p>
+                <p>You can close this tab and return to the GVPN app.</p>
                 <p style="font-family: monospace; font-size: 12px; opacity: 0.7;">${publicKey}</p>
               </div>
               <script>
@@ -184,7 +206,6 @@ class PhantomConnect {
         const priceSOL = parseFloat(url.searchParams.get('priceSOL')) || 0;
         const durationDays = parseInt(url.searchParams.get('durationDays')) || 30;
         
-        console.log('[Phantom] Transaction callback:', { success, signature, error, plan });
         
         const result = {
           success,
@@ -249,7 +270,7 @@ class PhantomConnect {
               <div class="container">
                 <h1>✅ Payment Successful!</h1>
                 <p>Your subscription has been activated.</p>
-                <p>You can close this tab and return to the DVPN app.</p>
+                <p>You can close this tab and return to the GVPN app.</p>
                 <p class="signature">${signature}</p>
               </div>
               <script>
@@ -288,7 +309,126 @@ class PhantomConnect {
               <div class="container">
                 <h1>❌ Payment Cancelled</h1>
                 <p>${error || 'Transaction was cancelled or failed.'}</p>
-                <p>You can close this tab and return to the DVPN app.</p>
+                <p>You can close this tab and return to the GVPN app.</p>
+              </div>
+              <script>
+                setTimeout(() => { window.close(); }, 3000);
+              </script>
+            </body>
+            </html>
+          `);
+        }
+      }
+      // Handle node registration callback
+      else if (url.pathname === '/node-callback') {
+        const success = url.searchParams.get('success') === 'true';
+        const signature = url.searchParams.get('signature');
+        const nodePda = url.searchParams.get('nodePda');
+        const error = url.searchParams.get('error');
+        
+        
+        const result = {
+          success,
+          signature: signature || null,
+          nodePda: nodePda || null,
+          error: error || null
+        };
+        
+        // Notify main process
+        if (this.onNodeRegistrationCallback) {
+          this.onNodeRegistrationCallback(result);
+        }
+        
+        // Resolve pending node registration promise
+        if (this.pendingNodeRegistration) {
+          this.pendingNodeRegistration.resolve(result);
+          this.pendingNodeRegistration = null;
+        }
+        
+        // Send response page
+        res.writeHead(200, { 
+          'Content-Type': 'text/html',
+          'Access-Control-Allow-Origin': '*'
+        });
+        
+        if (success) {
+          res.end(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Node Registered!</title>
+              <style>
+                body {
+                  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                  color: white;
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  height: 100vh;
+                  margin: 0;
+                  text-align: center;
+                }
+                .container {
+                  background: rgba(255,255,255,0.1);
+                  padding: 40px;
+                  border-radius: 20px;
+                }
+                h1 { color: #14F195; }
+                .signature { 
+                  font-family: monospace; 
+                  font-size: 10px; 
+                  opacity: 0.7;
+                  word-break: break-all;
+                  max-width: 400px;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <h1>✅ Node Registered On-Chain!</h1>
+                <p>Your node is now on the Solana blockchain.</p>
+                <p>You can now receive subscription rewards!</p>
+                <p>Close this tab and return to the GVPN app.</p>
+                <p class="signature">${signature}</p>
+              </div>
+              <script>
+                setTimeout(() => { window.close(); }, 3000);
+              </script>
+            </body>
+            </html>
+          `);
+        } else {
+          res.end(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Registration Failed</title>
+              <style>
+                body {
+                  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                  color: white;
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  height: 100vh;
+                  margin: 0;
+                  text-align: center;
+                }
+                .container {
+                  background: rgba(255,255,255,0.1);
+                  padding: 40px;
+                  border-radius: 20px;
+                }
+                h1 { color: #ff5252; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <h1>❌ Registration Failed</h1>
+                <p>${error || 'Node registration was cancelled or failed.'}</p>
+                <p>You can close this tab and return to the GVPN app.</p>
               </div>
               <script>
                 setTimeout(() => { window.close(); }, 3000);
@@ -305,12 +445,10 @@ class PhantomConnect {
     });
 
     server.listen(SERVER_PORT, () => {
-      console.log(`[Phantom] Connection server running on port ${SERVER_PORT}`);
     });
 
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
-        console.log('[Phantom] Port in use, server likely already running');
       } else {
         console.error('[Phantom] Server error:', err);
       }
@@ -324,7 +462,6 @@ class PhantomConnect {
     if (server) {
       server.close();
       server = null;
-      console.log('[Phantom] Server stopped');
     }
   }
 
@@ -332,7 +469,6 @@ class PhantomConnect {
    * Handle callback from browser (legacy - for custom protocol)
    */
   handleCallback(url) {
-    console.log('[Phantom] Handling callback:', url);
     
     try {
       const urlObj = new URL(url);
@@ -409,8 +545,54 @@ class PhantomConnect {
       });
       
       const txUrl = `http://localhost:${SERVER_PORT}/phantom-transaction.html?${params.toString()}`;
-      console.log('[Phantom] Opening transaction page:', txUrl);
       shell.openExternal(txUrl);
+    });
+  }
+
+  /**
+   * Open node registration page in browser (signs with Phantom)
+   * @param {Object} nodeParams - Node registration parameters
+   * @returns {Promise} - Resolves when registration is complete or rejected
+   */
+  async openNodeRegistrationPage(nodeParams) {
+    this.startServer();
+    
+    return new Promise((resolve, reject) => {
+      // Store pending node registration promise
+      this.pendingNodeRegistration = { resolve, reject };
+      
+      // Set timeout for registration
+      const timeout = setTimeout(() => {
+        if (this.pendingNodeRegistration) {
+          this.pendingNodeRegistration.resolve({
+            success: false,
+            error: 'Node registration timed out'
+          });
+          this.pendingNodeRegistration = null;
+        }
+      }, 5 * 60 * 1000); // 5 minute timeout
+      
+      // Override resolve to clear timeout
+      const originalResolve = resolve;
+      this.pendingNodeRegistration.resolve = (result) => {
+        clearTimeout(timeout);
+        originalResolve(result);
+      };
+      
+      // Build registration URL with params
+      const params = new URLSearchParams({
+        endpoint: nodeParams.endpoint,
+        location: nodeParams.location,
+        region: nodeParams.region,
+        pricePerHour: nodeParams.pricePerHour.toString(),
+        wgPublicKey: nodeParams.wgPublicKey || '',
+        walletAddress: nodeParams.walletAddress,
+        programId: nodeParams.programId || 'EYDWvx95gq6GhniDGHMHbn6DsigFhcWGHvHgbbxzuqQq',
+        rpcUrl: nodeParams.rpcUrl || 'https://api.devnet.solana.com'
+      });
+      
+      const regUrl = `http://localhost:${SERVER_PORT}/phantom-register-node.html?${params.toString()}`;
+      shell.openExternal(regUrl);
     });
   }
 

@@ -16,7 +16,6 @@ const program = new Program(idl, PROGRAM_ID, provider);
 const SESSION_STATES = ['Active', 'Closed', 'Claimed', 'Disputed', 'Resolved'];
 
 async function indexProviders() {
-  console.log('🔄 Indexing providers...');
   const accounts = await program.account.provider.all();
   
   for (const acc of accounts) {
@@ -32,11 +31,9 @@ async function indexProviders() {
     });
   }
   
-  console.log(`✅ Indexed ${accounts.length} providers`);
 }
 
 async function indexNodes() {
-  console.log('🔄 Indexing nodes...');
   const accounts = await program.account.node.all();
   
   for (const acc of accounts) {
@@ -56,11 +53,9 @@ async function indexNodes() {
     });
   }
   
-  console.log(`✅ Indexed ${accounts.length} nodes`);
 }
 
 async function indexSessions() {
-  console.log('🔄 Indexing sessions...');
   const accounts = await program.account.session.all();
   
   for (const acc of accounts) {
@@ -83,13 +78,9 @@ async function indexSessions() {
     });
   }
   
-  console.log(`✅ Indexed ${accounts.length} sessions`);
 }
 
 async function runIndexer() {
-  console.log('🚀 Starting DVPN Indexer...');
-  console.log(`📡 RPC: ${RPC_ENDPOINT}`);
-  console.log(`📝 Program: ${PROGRAM_ID.toString()}`);
   
   await initDatabase();
   
@@ -98,7 +89,6 @@ async function runIndexer() {
   await indexNodes();
   await indexSessions();
   
-  console.log(`\n⏰ Polling every ${POLL_INTERVAL_MS}ms...`);
   
   // Continuous polling
   setInterval(async () => {
@@ -114,7 +104,6 @@ async function runIndexer() {
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-  console.log('\n👋 Shutting down indexer...');
   process.exit(0);
 });
 

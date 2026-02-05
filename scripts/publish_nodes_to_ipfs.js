@@ -57,8 +57,6 @@ let publishedCIDs = [];
 
 // Initialize IPFS node
 async function initIPFS() {
-  console.log('🚀 Starting IPFS node...');
-  console.log('   This may take a minute on first run...\n');
   
   ipfs = await create({
     repo: './ipfs-publisher-data',
@@ -80,9 +78,6 @@ async function initIPFS() {
   });
   
   const { id, agentVersion } = await ipfs.id();
-  console.log('✅ IPFS node started successfully!');
-  console.log(`   Peer ID: ${id}`);
-  console.log(`   Version: ${agentVersion}\n`);
   
   return ipfs;
 }
@@ -101,10 +96,6 @@ async function publishNode(nodeData) {
     const { cid } = await ipfs.add(JSON.stringify(nodeWithTimestamp, null, 2));
     const cidString = cid.toString();
     
-    console.log(`📝 Node stored in IPFS:`);
-    console.log(`   Endpoint: ${nodeData.endpoint}`);
-    console.log(`   Location: ${nodeData.location}`);
-    console.log(`   CID: ${cidString}`);
     
     // Announce via PubSub
     const announcement = {
@@ -117,7 +108,6 @@ async function publishNode(nodeData) {
       new TextEncoder().encode(JSON.stringify(announcement))
     );
     
-    console.log(`📢 Announced to network: ${NODES_TOPIC}\n`);
     
     return cidString;
   } catch (error) {
@@ -128,9 +118,6 @@ async function publishNode(nodeData) {
 
 // Publish all nodes
 async function publishAllNodes() {
-  console.log('═══════════════════════════════════════════════');
-  console.log('   Publishing Nodes to IPFS Network');
-  console.log('═══════════════════════════════════════════════\n');
   
   publishedCIDs = [];
   
@@ -143,9 +130,6 @@ async function publishAllNodes() {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
   
-  console.log('═══════════════════════════════════════════════');
-  console.log(`   ✅ Published ${publishedCIDs.length}/${VPN_NODES.length} nodes`);
-  console.log('═══════════════════════════════════════════════\n');
   
   // Save CIDs to file
   const cidsFile = path.join(__dirname, 'published-nodes.json');
@@ -154,12 +138,10 @@ async function publishAllNodes() {
     nodes: publishedCIDs
   }, null, 2));
   
-  console.log(`💾 CIDs saved to: ${cidsFile}\n`);
 }
 
 // Monitor IPFS network
 async function monitorNetwork() {
-  console.log('👀 Monitoring IPFS network for other nodes...\n');
   
   await ipfs.pubsub.subscribe(NODES_TOPIC, (msg) => {
     try {
@@ -167,7 +149,6 @@ async function monitorNetwork() {
       const isOwnNode = VPN_NODES.some(n => n.endpoint === data.endpoint);
       
       if (!isOwnNode) {
-        console.log(`📨 Discovered peer node: ${data.endpoint} (${data.location})`);
       }
     } catch (err) {
       // Ignore malformed messages
@@ -181,10 +162,6 @@ async function getNetworkStats() {
     const peers = await ipfs.swarm.peers();
     const topics = await ipfs.pubsub.ls();
     
-    console.log('\n📊 Network Statistics:');
-    console.log(`   Connected Peers: ${peers.length}`);
-    console.log(`   Active Topics: ${topics.length}`);
-    console.log(`   Subscribed to: ${NODES_TOPIC}`);
     
     return { peers: peers.length, topics: topics.length };
   } catch (error) {
@@ -196,10 +173,6 @@ async function getNetworkStats() {
 // Main function
 async function main() {
   console.clear();
-  console.log('╔═══════════════════════════════════════════════╗');
-  console.log('║   DVPN - IPFS Node Publisher                 ║');
-  console.log('║   Decentralized VPN Node Discovery           ║');
-  console.log('╚═══════════════════════════════════════════════╝\n');
   
   try {
     // Initialize IPFS
@@ -215,11 +188,8 @@ async function main() {
     await getNetworkStats();
     
     // Keep alive and republish periodically
-    console.log(`\n🔄 Will re-announce nodes every ${REPUBLISH_INTERVAL / 60000} minutes`);
-    console.log('   Press Ctrl+C to stop\n');
     
     setInterval(async () => {
-      console.log(`\n⏰ ${new Date().toLocaleTimeString()} - Re-announcing nodes...`);
       await publishAllNodes();
       await getNetworkStats();
     }, REPUBLISH_INTERVAL);
@@ -232,12 +202,9 @@ async function main() {
 
 // Handle graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('\n\n🛑 Shutting down...');
   if (ipfs) {
-    console.log('   Stopping IPFS node...');
     await ipfs.stop();
   }
-  console.log('   Goodbye! 👋\n');
   process.exit(0);
 });
 

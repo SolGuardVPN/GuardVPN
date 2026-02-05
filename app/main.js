@@ -46,15 +46,12 @@ async function installWireGuardWindows() {
   const tempDir = app.getPath('temp');
   const installerPath = path.join(tempDir, 'wireguard-installer.exe');
   
-  console.log('📥 Downloading WireGuard installer...');
   
   try {
     // Download the installer
     await downloadFile(WIREGUARD_WIN_URL, installerPath);
-    console.log('✅ WireGuard installer downloaded to:', installerPath);
     
     // Run the installer silently
-    console.log('📦 Installing WireGuard...');
     
     return new Promise((resolve, reject) => {
       // Run installer with /S for silent install (NSIS flag)
@@ -66,7 +63,6 @@ async function installWireGuardWindows() {
           // Even if there's an error, check if WireGuard was installed
           const wgPath = 'C:\\Program Files\\WireGuard\\wireguard.exe';
           if (fs.existsSync(wgPath)) {
-            console.log('✅ WireGuard installed successfully!');
             resolve(wgPath);
           } else {
             console.error('❌ WireGuard installation failed:', stderr || error.message);
@@ -77,7 +73,6 @@ async function installWireGuardWindows() {
           setTimeout(() => {
             const wgPath = 'C:\\Program Files\\WireGuard\\wireguard.exe';
             if (fs.existsSync(wgPath)) {
-              console.log('✅ WireGuard installed successfully!');
               resolve(wgPath);
             } else {
               reject(new Error('WireGuard installation may have failed. Please check and try again.'));
@@ -98,7 +93,6 @@ function loadSubscriptionFromFile() {
     if (fs.existsSync(SUBSCRIPTION_FILE)) {
       const data = fs.readFileSync(SUBSCRIPTION_FILE, 'utf8');
       const sub = JSON.parse(data);
-      console.log('📂 Loaded subscription from file:', sub.plan, 'expires:', new Date(sub.expiresAt));
       return sub;
     }
   } catch (e) {
@@ -110,7 +104,6 @@ function loadSubscriptionFromFile() {
 function saveSubscriptionToFile(subscription) {
   try {
     fs.writeFileSync(SUBSCRIPTION_FILE, JSON.stringify(subscription, null, 2));
-    console.log('💾 Saved subscription to file:', subscription.plan);
     return true;
   } catch (e) {
     console.error('Failed to save subscription file:', e);
@@ -122,7 +115,6 @@ function clearSubscriptionFile() {
   try {
     if (fs.existsSync(SUBSCRIPTION_FILE)) {
       fs.unlinkSync(SUBSCRIPTION_FILE);
-      console.log('🗑️ Cleared subscription file');
     }
     return true;
   } catch (e) {
@@ -170,8 +162,6 @@ function switchNetworkMode(mode) {
   PROGRAM_ID = NETWORK_CONFIG[mode].programId;
   connection = new Connection(SOLANA_RPC, 'confirmed');
   
-  console.log(`🌐 [Main] Switched to ${NETWORK_CONFIG[mode].name}`);
-  console.log(`   RPC: ${SOLANA_RPC}`);
   
   return NETWORK_CONFIG[mode];
 }
@@ -199,9 +189,8 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   // Another instance is running - quit this one
   // But first check if we have a URL to pass
-  const url = process.argv.find(arg => arg.startsWith('dvpn://'));
+  const url = process.argv.find(arg => arg.startsWith('gvpn://'));
   if (url) {
-    console.log('[Main] Passing URL to first instance:', url);
   }
   app.quit();
 } else {
@@ -213,9 +202,8 @@ if (!gotTheLock) {
       mainWindow.show();
     }
     // Handle the protocol URL on Windows/Linux
-    const url = commandLine.find(arg => arg.startsWith('dvpn://'));
+    const url = commandLine.find(arg => arg.startsWith('gvpn://'));
     if (url) {
-      console.log('[Main] Received deeplink from second instance:', url);
       handlePhantomCallback(url);
     }
   });
@@ -224,26 +212,24 @@ if (!gotTheLock) {
 // Register custom protocol for Phantom deeplink callbacks
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient('dvpn', process.execPath, [path.resolve(process.argv[1])]);
+    app.setAsDefaultProtocolClient('gvpn', process.execPath, [path.resolve(process.argv[1])]);
   }
 } else {
-  app.setAsDefaultProtocolClient('dvpn');
+  app.setAsDefaultProtocolClient('gvpn');
 }
 
 // Handle protocol URL on macOS (this works even on first instance)
 app.on('open-url', (event, url) => {
   event.preventDefault();
-  console.log('[Main] Received deeplink (open-url):', url);
   handlePhantomCallback(url);
 });
 
 // Handle Phantom callback
 function handlePhantomCallback(url) {
-  if (!url || !url.startsWith('dvpn://')) return;
+  if (!url || !url.startsWith('gvpn://')) return;
   
   try {
     const result = phantomConnect.handleCallback(url);
-    console.log('[Main] Phantom callback result:', result);
     
     // Focus the main window
     if (mainWindow) {
@@ -388,7 +374,6 @@ app.whenReady().then(() => {
   
   // Set up callback for Phantom wallet connection
   phantomConnect.setOnConnectCallback((result) => {
-    console.log('[Main] Phantom wallet connected via HTTP callback:', result);
     
     // Focus the main window
     if (mainWindow) {
@@ -422,7 +407,6 @@ app.on('activate', () => {
 // Handle real Solana payment
 ipcMain.handle('process-payment', async (event, { fromKeypair, toAddress, amountLamports }) => {
   try {
-    console.log(`[Main] Processing payment: ${amountLamports} lamports to ${toAddress}`);
     
     // Convert base58 private key to Keypair
     const secretKey = Uint8Array.from(fromKeypair);
@@ -433,7 +417,6 @@ ipcMain.handle('process-payment', async (event, { fromKeypair, toAddress, amount
     
     // Check balance
     const balance = await connection.getBalance(keypair.publicKey);
-    console.log(`[Main] Current balance: ${balance / LAMPORTS_PER_SOL} SOL`);
     
     if (balance < amountLamports) {
       return { success: false, error: `Insufficient balance. Need ${amountLamports / LAMPORTS_PER_SOL} SOL` };
@@ -456,11 +439,9 @@ ipcMain.handle('process-payment', async (event, { fromKeypair, toAddress, amount
     // Sign and send
     transaction.sign(keypair);
     const signature = await connection.sendRawTransaction(transaction.serialize());
-    console.log(`[Main] Transaction sent: ${signature}`);
     
     // Wait for confirmation
     await connection.confirmTransaction(signature);
-    console.log(`[Main] Payment confirmed!`);
     
     return { success: true, signature };
   } catch (error) {
@@ -500,7 +481,7 @@ ipcMain.handle('create-session', async (event, { sessionData }) => {
 // Generate WireGuard keypair
 ipcMain.handle('generate-wg-keys', async () => {
   try {
-    const configDir = path.join(os.homedir(), '.dvpn');
+    const configDir = path.join(os.homedir(), '.gvpn');
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true });
     }
@@ -579,7 +560,6 @@ ipcMain.handle('request-wg-config', async (event, { serverIp, port }) => {
       }, 15000);
       
       client.connect(port, serverIp, () => {
-        console.log(`Connected to ncat at ${serverIp}:${port}`);
         client.write('start\n');
         // Keep connection alive to receive response
         client.setKeepAlive(true, 1000);
@@ -587,12 +567,10 @@ ipcMain.handle('request-wg-config', async (event, { serverIp, port }) => {
       
       client.on('data', (data) => {
         configData += data.toString();
-        console.log(`Received ${data.length} bytes from ncat`);
         
         // Reset the data receive timeout - wait for more data or resolve after 500ms of no data
         if (dataReceiveTimeout) clearTimeout(dataReceiveTimeout);
         dataReceiveTimeout = setTimeout(() => {
-          console.log('No more data, closing connection');
           client.end();
         }, 500);
       });
@@ -600,7 +578,6 @@ ipcMain.handle('request-wg-config', async (event, { serverIp, port }) => {
       client.on('close', () => {
         clearTimeout(timeout);
         if (dataReceiveTimeout) clearTimeout(dataReceiveTimeout);
-        console.log(`Connection closed, total data: ${configData.length} bytes`);
         if (configData.length > 0) {
           resolve({ success: true, config: configData });
         } else {
@@ -610,7 +587,6 @@ ipcMain.handle('request-wg-config', async (event, { serverIp, port }) => {
       
       client.on('end', () => {
         // Connection ended by server, wait for close
-        console.log('Server ended connection');
       });
       
       client.on('error', (error) => {
@@ -641,13 +617,12 @@ ipcMain.handle('auth-with-node', async (event, { nodeEndpoint, authData }) => {
 // Apply WireGuard config and connect
 ipcMain.handle('apply-wg-config', async (event, { config }) => {
   try {
-    const configDir = path.join(os.homedir(), '.dvpn');
-    const configPath = path.join(configDir, 'dvpn.conf');
+    const configDir = path.join(os.homedir(), '.gvpn');
+    const configPath = path.join(configDir, 'gvpn.conf');
 
-    // Ensure the .dvpn directory exists
+    // Ensure the .gvpn directory exists
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true });
-      console.log('Created config directory:', configDir);
     }
 
     // Clean the config - extract only valid WireGuard config lines
@@ -719,10 +694,6 @@ ipcMain.handle('apply-wg-config', async (event, { config }) => {
     
     const cleanConfig = cleanLines.join('\n') + '\n';
     
-    console.log('=== CONFIG CLEANING ===');
-    console.log('Original length:', config.length);
-    console.log('Cleaned length:', cleanConfig.length);
-    console.log('Cleaned config:\n', cleanConfig);
 
     // Write config file
     fs.writeFileSync(configPath, cleanConfig);
@@ -734,7 +705,6 @@ ipcMain.handle('apply-wg-config', async (event, { config }) => {
         // Use osascript for macOS - it shows a native password dialog
         const vpnScript = `do shell script "networksetup -setv6off Wi-Fi 2>/dev/null; networksetup -setv6off Ethernet 2>/dev/null; wg-quick up ${configPath}" with administrator privileges`;
         
-        console.log('Starting VPN connection with admin privileges...');
         
         exec(`osascript -e '${vpnScript}'`, { timeout: 60000 }, (error, stdout, stderr) => {
           if (error) {
@@ -747,7 +717,6 @@ ipcMain.handle('apply-wg-config', async (event, { config }) => {
             return;
           }
           
-          console.log('VPN connected:', stdout);
           resolve({ 
             success: true, 
             message: 'VPN connected successfully!',
@@ -777,7 +746,6 @@ ipcMain.handle('apply-wg-config', async (event, { config }) => {
           try {
             if (p && fs.existsSync(p)) {
               foundWireguard = p;
-              console.log('Found WireGuard at:', p);
               break;
             }
           } catch (e) {
@@ -799,7 +767,6 @@ ipcMain.handle('apply-wg-config', async (event, { config }) => {
             });
             if (whereResult) {
               foundWireguard = whereResult;
-              console.log('Found WireGuard in PATH:', foundWireguard);
             }
           } catch (e) {
             // where command failed
@@ -808,7 +775,6 @@ ipcMain.handle('apply-wg-config', async (event, { config }) => {
         
         if (!foundWireguard) {
           // Try to auto-install WireGuard on Windows
-          console.log('WireGuard not found, attempting auto-install...');
           
           // Send progress to renderer
           if (mainWindow && mainWindow.webContents) {
@@ -822,14 +788,12 @@ ipcMain.handle('apply-wg-config', async (event, { config }) => {
             const installResult = await installWireGuardWindows();
             
             if (installResult.success) {
-              console.log('WireGuard installed successfully');
               
               // Re-check for WireGuard after installation
               for (const p of checkPaths.slice(0, -1)) {
                 try {
                   if (p && fs.existsSync(p)) {
                     foundWireguard = p;
-                    console.log('Found WireGuard after install at:', p);
                     break;
                   }
                 } catch (e) {
@@ -928,7 +892,7 @@ ipcMain.handle('apply-wg-config', async (event, { config }) => {
 // Disconnect VPN
 ipcMain.handle('disconnect-vpn', async (event, { presharedKey, serverIp }) => {
   try {
-    const configPath = path.join(os.homedir(), '.dvpn', 'dvpn.conf');
+    const configPath = path.join(os.homedir(), '.gvpn', 'gvpn.conf');
 
     // Step 1: Send stop command to server to remove peer
     if (presharedKey && serverIp) {
@@ -962,7 +926,6 @@ ipcMain.handle('disconnect-vpn', async (event, { presharedKey, serverIp }) => {
             return;
           }
           
-          console.log('VPN disconnected');
           resolve({ success: true, message: 'VPN disconnected', output: stdout });
         });
       });
@@ -1072,10 +1035,9 @@ ipcMain.handle('open-external', async (event, url) => {
 // Connect Wallet via Phantom - Opens browser page
 ipcMain.handle('connect-phantom-wallet', async () => {
   try {
-    console.log('[Main] Initiating Phantom wallet connection...');
     
     // Start the server and open browser - don't await the promise
-    // The actual result comes via callback (dvpn:// protocol)
+    // The actual result comes via callback (gvpn:// protocol)
     phantomConnect.connect().catch(err => {
       console.error('[Main] Phantom connect error:', err);
       if (mainWindow && mainWindow.webContents) {
@@ -1218,7 +1180,6 @@ ipcMain.handle('init-ipfs', async () => {
   try {
     await ipfsModule.initIPFS();
     ipfsInitialized = true;
-    console.log('✅ IPFS initialized successfully');
     return { success: true };
   } catch (error) {
     console.error('❌ IPFS init error:', error);
@@ -1227,7 +1188,6 @@ ipcMain.handle('init-ipfs', async () => {
 });
 
 ipcMain.handle('get-nodes-from-ipfs', async (event, region) => {
-  console.log('🔍 Getting nodes from IPFS for region:', region);
   
   try {
     // Try to get nodes from IPFS first
@@ -1235,7 +1195,6 @@ ipcMain.handle('get-nodes-from-ipfs', async (event, region) => {
     
     // If no nodes from IPFS, fallback to indexer API
     if (!nodes || nodes.length === 0) {
-      console.log('⚠️ No nodes from IPFS, fetching from indexer API...');
       const response = await axios.get(`${INDEXER_URL}/nodes`);
       
       if (response.data.success) {
@@ -1251,7 +1210,6 @@ ipcMain.handle('get-nodes-from-ipfs', async (event, region) => {
       }
     }
     
-    console.log(`📡 Retrieved ${nodes.length} nodes (IPFS + Indexer fallback)`);
     return { success: true, nodes };
   } catch (error) {
     console.error('❌ Error getting nodes:', error);
@@ -1259,9 +1217,54 @@ ipcMain.handle('get-nodes-from-ipfs', async (event, region) => {
   }
 });
 
+// ===== SAVE WALLET KEYPAIR =====
+// Allows importing Phantom wallet private key for on-chain operations
+ipcMain.handle('save-wallet-keypair', async (event, { privateKey, walletAddress }) => {
+  
+  try {
+    const bs58 = require('bs58');
+    
+    // Decode the private key (Phantom exports as base58)
+    let secretKey;
+    try {
+      secretKey = bs58.decode(privateKey);
+    } catch (e) {
+      // Try as JSON array
+      try {
+        secretKey = new Uint8Array(JSON.parse(privateKey));
+      } catch (e2) {
+        throw new Error('Invalid private key format. Use Base58 or JSON array.');
+      }
+    }
+    
+    if (secretKey.length !== 64) {
+      throw new Error('Invalid private key length. Expected 64 bytes.');
+    }
+    
+    // Verify the keypair matches the expected wallet address
+    const keypair = Keypair.fromSecretKey(secretKey);
+    if (keypair.publicKey.toBase58() !== walletAddress) {
+      throw new Error(`Private key does not match wallet ${walletAddress}. Got ${keypair.publicKey.toBase58()}`);
+    }
+    
+    // Save to wallet.json
+    const walletPath = path.join(__dirname, '..', 'wallet.json');
+    fs.writeFileSync(walletPath, JSON.stringify({
+      publicKey: walletAddress,
+      secretKey: Array.from(secretKey)
+    }, null, 2));
+    
+    
+    return { success: true, message: 'Wallet keypair saved successfully!' };
+    
+  } catch (error) {
+    console.error('❌ Error saving wallet keypair:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // ===== PROVIDER REGISTRATION HANDLERS =====
 ipcMain.handle('register-provider', async (event) => {
-  console.log('📝 Registering new provider on Solana testnet...');
   try {
     // Load wallet keypair
     const walletPath = path.join(__dirname, '..', 'test-wallet-keypair.json');
@@ -1274,7 +1277,6 @@ ipcMain.handle('register-provider', async (event) => {
     const secretKey = walletData.secretKey || walletData;
     const wallet = Keypair.fromSecretKey(new Uint8Array(secretKey));
     
-    console.log('💳 Using wallet:', wallet.publicKey.toString());
     
     // Load IDL
     const idlPath = path.join(__dirname, '..', 'target', 'idl', 'dvpn.json');
@@ -1299,7 +1301,6 @@ ipcMain.handle('register-provider', async (event) => {
       new PublicKey(PROGRAM_ID)
     );
     
-    console.log('🔑 Provider PDA:', providerPda.toString());
     
     // Register provider
     const tx = await program.methods
@@ -1312,7 +1313,6 @@ ipcMain.handle('register-provider', async (event) => {
       .signers([wallet])
       .rpc();
     
-    console.log('✅ Provider registered! TX:', tx);
     
     return { 
       success: true, 
@@ -1327,7 +1327,6 @@ ipcMain.handle('register-provider', async (event) => {
 });
 
 ipcMain.handle('get-provider-data', async (event, walletPubkey) => {
-  console.log('📊 Fetching provider data from blockchain:', walletPubkey);
   try {
     // Load IDL
     const idlPath = path.join(__dirname, '..', 'target', 'idl', 'dvpn.json');
@@ -1385,7 +1384,6 @@ ipcMain.handle('get-provider-data', async (event, walletPubkey) => {
       nodes
     };
     
-    console.log('✅ Provider data fetched from blockchain:', providerData);
     return { success: true, data: providerData };
   } catch (error) {
     console.error('❌ Error fetching provider data:', error);
@@ -1397,70 +1395,251 @@ ipcMain.handle('get-provider-data', async (event, walletPubkey) => {
   }
 });
 
-ipcMain.handle('register-node', async (event, nodeData) => {
-  console.log('🖥️ Registering new node on Solana testnet:', nodeData);
+// ==================== REGISTER NODE VIA PHANTOM ====================
+ipcMain.handle('register-node-phantom', async (event, nodeData) => {
+  
   try {
-    // Load wallet keypair
-    const walletPath = path.join(__dirname, '..', 'test-wallet-keypair.json');
-    const walletDataFile = JSON.parse(fs.readFileSync(walletPath, 'utf8'));
-    const secretKey = walletDataFile.secretKey || walletDataFile;
-    const wallet = Keypair.fromSecretKey(new Uint8Array(secretKey));
+    // Open the Phantom signing page
+    const result = await phantomConnect.openNodeRegistrationPage({
+      endpoint: nodeData.endpoint,
+      location: nodeData.location,
+      region: nodeData.region,
+      pricePerHour: nodeData.pricePerHour,
+      wgPublicKey: nodeData.wgPublicKey,
+      walletAddress: nodeData.walletAddress,
+      programId: PROGRAM_ID,
+      rpcUrl: SOLANA_RPC
+    });
     
-    // Load IDL
-    const idlPath = path.join(__dirname, '..', 'target', 'idl', 'dvpn.json');
-    const idl = JSON.parse(fs.readFileSync(idlPath, 'utf8'));
     
-    const provider = new AnchorProvider(
-      connection,
-      { publicKey: wallet.publicKey, signTransaction: async (tx) => tx, signAllTransactions: async (txs) => txs },
-      { commitment: 'confirmed' }
-    );
+    return result;
     
-    const program = new Program(idl, PROGRAM_ID, provider);
-    
-    // Derive PDAs
-    const [providerPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from('provider'), wallet.publicKey.toBuffer()],
-      new PublicKey(PROGRAM_ID)
-    );
-    
-    // Generate a unique node keypair
-    const nodeKeypair = Keypair.generate();
-    
-    // Convert price to lamports per minute
-    const pricePerMinuteLamports = Math.floor(parseFloat(nodeData.pricePerHour) * LAMPORTS_PER_SOL / 60);
-    
-    console.log('🔑 Node keypair:', nodeKeypair.publicKey.toString());
-    console.log('💰 Price per minute:', pricePerMinuteLamports, 'lamports');
-    
-    // Register node on blockchain
-    const tx = await program.methods
-      .registerNode(
-        nodeData.endpoint,
-        nodeData.region || 'unknown',
-        pricePerMinuteLamports,
-        parseInt(nodeData.capacity) || 100,
-        nodeData.wgPublicKey || ''
-      )
-      .accounts({
-        node: nodeKeypair.publicKey,
-        provider: providerPda,
-        authority: wallet.publicKey,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([wallet, nodeKeypair])
-      .rpc();
-    
-    console.log('✅ Node registered on blockchain! TX:', tx);
-    
-    return { 
-      success: true, 
-      message: 'Node registered successfully on testnet',
-      nodePubkey: nodeKeypair.publicKey.toString(),
-      signature: tx
-    };
   } catch (error) {
-    console.error('❌ Error registering node:', error);
+    console.error('❌ Phantom node registration error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ==================== REGISTER NODE ON-CHAIN (KEYPAIR) ====================
+ipcMain.handle('register-node', async (event, nodeData) => {
+  
+  try {
+    // Try to find a matching wallet keypair
+    let wallet = null;
+    const targetWallet = nodeData.walletAddress;
+    
+    // Check multiple possible keypair files
+    const keypairFiles = [
+      path.join(__dirname, '..', 'wallet.json'),
+      path.join(__dirname, '..', 'user-keypair.json'),
+      path.join(__dirname, '..', 'test-wallet-keypair.json'),
+      path.join(__dirname, '..', `${targetWallet}.json`),
+      path.join(require('os').homedir(), '.config', 'solana', 'id.json')
+    ];
+    
+    for (const walletPath of keypairFiles) {
+      if (fs.existsSync(walletPath)) {
+        try {
+          const walletDataFile = JSON.parse(fs.readFileSync(walletPath, 'utf8'));
+          const secretKey = walletDataFile.secretKey || walletDataFile;
+          const kp = Keypair.fromSecretKey(new Uint8Array(secretKey));
+          
+          if (kp.publicKey.toBase58() === targetWallet) {
+            wallet = kp;
+            break;
+          }
+        } catch (e) {
+          // Try next file
+        }
+      }
+    }
+    
+    if (!wallet) {
+      
+      return {
+        success: false,
+        error: `Keypair not found for wallet ${targetWallet}. Please export your Phantom wallet private key and save it as wallet.json in the project root.`,
+        needsPrivateKey: true
+      };
+    }
+    
+    
+    // Check balance
+    const balance = await connection.getBalance(wallet.publicKey);
+    
+    if (balance < 0.005 * LAMPORTS_PER_SOL) {
+      throw new Error('Insufficient SOL balance. Need at least 0.005 SOL for registration.');
+    }
+    
+    const programId = new PublicKey(PROGRAM_ID);
+    
+    // Derive Provider PDA
+    const [providerPda] = PublicKey.findProgramAddressSync(
+      [PROVIDER_SEED, wallet.publicKey.toBuffer()],
+      programId
+    );
+    
+    // Check if provider exists
+    const providerAccount = await connection.getAccountInfo(providerPda);
+    if (!providerAccount) {
+      throw new Error('Provider not registered on-chain. Please register as provider first.');
+    }
+    
+    // Generate unique node ID using timestamp
+    const nodeId = BigInt(Date.now());
+    
+    // Derive Node PDA
+    const nodeIdBuffer = Buffer.alloc(8);
+    nodeIdBuffer.writeBigUInt64LE(nodeId);
+    
+    const NODE_SEED = Buffer.from('node');
+    const [nodePda] = PublicKey.findProgramAddressSync(
+      [NODE_SEED, providerPda.toBuffer(), nodeIdBuffer],
+      programId
+    );
+    
+    // Parse node parameters
+    const endpoint = (nodeData.endpoint || '').substring(0, 80);
+    const region = (nodeData.region || 'unknown').substring(0, 12);
+    const pricePerHour = parseFloat(nodeData.pricePerHour) || 0.001;
+    const pricePerMinuteLamports = BigInt(Math.floor(pricePerHour * LAMPORTS_PER_SOL / 60));
+    const maxCapacity = parseInt(nodeData.capacity) || 100;
+    const bandwidthMbps = parseInt(nodeData.bandwidthMbps) || 100;
+    
+    // WireGuard public key (32 bytes)
+    let wgPubkeyBytes = Buffer.alloc(32);
+    if (nodeData.wgPublicKey) {
+      try {
+        const decoded = Buffer.from(nodeData.wgPublicKey, 'base64');
+        if (decoded.length === 32) {
+          wgPubkeyBytes = decoded;
+        }
+      } catch (e) {
+      }
+    }
+    
+    
+    // Build instruction data for register_node
+    // Anchor discriminator for register_node
+    const discriminator = Buffer.from([178, 100, 167, 106, 183, 36, 109, 61]);
+    
+    // Encode parameters
+    const endpointBuffer = Buffer.alloc(4 + endpoint.length);
+    endpointBuffer.writeUInt32LE(endpoint.length, 0);
+    endpointBuffer.write(endpoint, 4);
+    
+    const regionBuffer = Buffer.alloc(4 + region.length);
+    regionBuffer.writeUInt32LE(region.length, 0);
+    regionBuffer.write(region, 4);
+    
+    const priceBuffer = Buffer.alloc(8);
+    priceBuffer.writeBigUInt64LE(pricePerMinuteLamports);
+    
+    const capacityBuffer = Buffer.alloc(4);
+    capacityBuffer.writeUInt32LE(maxCapacity);
+    
+    const bandwidthBuffer = Buffer.alloc(4);
+    bandwidthBuffer.writeUInt32LE(bandwidthMbps);
+    
+    const instructionData = Buffer.concat([
+      discriminator,
+      nodeIdBuffer,
+      endpointBuffer,
+      regionBuffer,
+      priceBuffer,
+      wgPubkeyBytes,
+      capacityBuffer,
+      bandwidthBuffer
+    ]);
+    
+    // Create instruction
+    const { Transaction, TransactionInstruction } = require('@solana/web3.js');
+    
+    const instruction = new TransactionInstruction({
+      keys: [
+        { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: providerPda, isSigner: false, isWritable: true },
+        { pubkey: nodePda, isSigner: false, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+      ],
+      programId: programId,
+      data: instructionData
+    });
+    
+    // Create and send transaction
+    const transaction = new Transaction();
+    transaction.add(instruction);
+    
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = wallet.publicKey;
+    transaction.sign(wallet);
+    
+    
+    const signature = await connection.sendRawTransaction(transaction.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed'
+    });
+    
+    
+    const confirmation = await connection.confirmTransaction({
+      signature,
+      blockhash,
+      lastValidBlockHeight
+    }, 'confirmed');
+    
+    if (confirmation.value.err) {
+      throw new Error('Transaction failed: ' + JSON.stringify(confirmation.value.err));
+    }
+    
+    
+    return {
+      success: true,
+      message: 'Node registered on-chain successfully!',
+      nodePda: nodePda.toBase58(),
+      signature: signature,
+      nodeId: nodeId.toString()
+    };
+    
+  } catch (error) {
+    console.error('❌ Error registering node on-chain:', error);
+    
+    // Check for specific errors
+    if (error.logs) {
+    }
+    
+    return { success: false, error: error.message };
+  }
+});
+
+// Submit signed transaction from Phantom
+ipcMain.handle('submit-signed-transaction', async (event, signedTxBase64) => {
+  try {
+    const { Transaction } = require('@solana/web3.js');
+    const signedTx = Transaction.from(Buffer.from(signedTxBase64, 'base64'));
+    
+    const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed'
+    });
+    
+    
+    // Wait for confirmation
+    const confirmation = await connection.confirmTransaction(signature, 'confirmed');
+    
+    if (confirmation.value.err) {
+      throw new Error('Transaction failed: ' + JSON.stringify(confirmation.value.err));
+    }
+    
+    
+    return {
+      success: true,
+      signature: signature,
+      message: 'Node registered on-chain successfully!'
+    };
+    
+  } catch (error) {
+    console.error('❌ Error submitting transaction:', error);
     return { success: false, error: error.message };
   }
 });
@@ -1478,7 +1657,6 @@ const SUBSCRIPTION_SEED = Buffer.from('subscription');
 
 // Create subscription - opens Phantom to sign transaction from USER's wallet
 ipcMain.handle('create-subscription', async (event, { walletAddress, planType, priceSOL }) => {
-  console.log('💳 Creating subscription:', { walletAddress, planType, priceSOL });
   
   try {
     const plan = SUBSCRIPTION_PLANS[planType.toLowerCase()];
@@ -1494,9 +1672,6 @@ ipcMain.handle('create-subscription', async (event, { walletAddress, planType, p
       new PublicKey(PROGRAM_ID)
     );
     
-    console.log('📍 Subscription PDA (Escrow):', subscriptionPDA.toBase58());
-    console.log('📍 User Wallet:', walletAddress);
-    console.log('💰 Amount:', plan.priceSOL, 'SOL');
     
     // Open browser to sign transaction with Phantom
     // This will transfer SOL from USER's wallet to the escrow PDA
@@ -1509,13 +1684,9 @@ ipcMain.handle('create-subscription', async (event, { walletAddress, planType, p
       walletAddress: walletAddress
     };
     
-    console.log('🌐 Opening Phantom transaction page...');
     const result = await phantomConnect.openTransactionPage(txParams);
     
     if (result.success) {
-      console.log('✅ Subscription payment successful!');
-      console.log('   Signature:', result.signature);
-      console.log('   Plan:', result.plan);
       
       return {
         success: true,
@@ -1537,7 +1708,6 @@ ipcMain.handle('create-subscription', async (event, { walletAddress, planType, p
 
 // Switch network mode (devnet/mainnet)
 ipcMain.handle('switch-network', async (event, networkMode) => {
-  console.log('🌐 [IPC] Switching network to:', networkMode);
   const config = switchNetworkMode(networkMode);
   return {
     success: true,
@@ -1556,7 +1726,6 @@ ipcMain.handle('get-network-mode', async () => {
 
 // Check subscription status
 ipcMain.handle('check-subscription', async (event, walletAddress) => {
-  console.log('🔍 Checking subscription for:', walletAddress);
   
   try {
     const userPubkey = new PublicKey(walletAddress);
@@ -1570,8 +1739,6 @@ ipcMain.handle('check-subscription', async (event, walletAddress) => {
     // Check PDA balance
     const balance = await connection.getBalance(subscriptionPDA);
     
-    console.log('📍 Subscription PDA:', subscriptionPDA.toBase58());
-    console.log('💰 PDA Balance:', balance / LAMPORTS_PER_SOL, 'SOL');
     
     // If there's a balance, there's likely an active subscription
     const hasSubscription = balance > 0;
@@ -1591,7 +1758,6 @@ ipcMain.handle('check-subscription', async (event, walletAddress) => {
 
 // Cancel subscription (would need program instruction in production)
 ipcMain.handle('cancel-subscription', async (event, walletAddress) => {
-  console.log('🚫 Cancel subscription for:', walletAddress);
   
   // Clear the subscription file
   clearSubscriptionFile();
@@ -1607,14 +1773,12 @@ ipcMain.handle('cancel-subscription', async (event, walletAddress) => {
 
 // Save subscription to persistent file storage
 ipcMain.handle('save-subscription', async (event, subscription) => {
-  console.log('💾 Saving subscription via IPC:', subscription.plan);
   const success = saveSubscriptionToFile(subscription);
   return { success };
 });
 
 // Load subscription from persistent file storage
 ipcMain.handle('load-subscription', async (event, walletAddress) => {
-  console.log('📂 Loading subscription via IPC for wallet:', walletAddress);
   const subscription = loadSubscriptionFromFile();
   
   if (subscription) {
@@ -1622,13 +1786,10 @@ ipcMain.handle('load-subscription', async (event, walletAddress) => {
     const now = Date.now();
     if (subscription.expiresAt > now) {
       if (!walletAddress || subscription.walletAddress === walletAddress) {
-        console.log('✅ Valid subscription found:', subscription.plan);
         return { success: true, subscription };
       } else {
-        console.log('⚠️ Subscription is for different wallet');
       }
     } else {
-      console.log('⏰ Subscription expired, clearing...');
       clearSubscriptionFile();
     }
   }
@@ -1638,7 +1799,6 @@ ipcMain.handle('load-subscription', async (event, walletAddress) => {
 
 // Clear subscription
 ipcMain.handle('clear-subscription', async (event) => {
-  console.log('🗑️ Clearing subscription via IPC');
   const success = clearSubscriptionFile();
   return { success };
 });
@@ -1646,7 +1806,6 @@ ipcMain.handle('clear-subscription', async (event) => {
 // ============= CHECK ON-CHAIN SUBSCRIPTION =============
 // Check if user has active subscription on Solana blockchain
 ipcMain.handle('check-onchain-subscription', async (event, walletAddress) => {
-  console.log('🔗 Checking on-chain subscription for:', walletAddress);
   
   try {
     const programId = new PublicKey(PROGRAM_ID);
@@ -1658,20 +1817,17 @@ ipcMain.handle('check-onchain-subscription', async (event, walletAddress) => {
       programId
     );
     
-    console.log('📍 Subscription PDA:', subscriptionPda.toBase58());
     
     // Fetch account info
     const accountInfo = await connection.getAccountInfo(subscriptionPda);
     
     if (!accountInfo) {
-      console.log('❌ No on-chain subscription found');
       return { success: true, hasSubscription: false };
     }
     
     // Parse subscription data (skip 8-byte discriminator)
     const data = accountInfo.data;
     if (data.length < 67) {
-      console.log('❌ Invalid subscription data length');
       return { success: true, hasSubscription: false };
     }
     
@@ -1695,12 +1851,6 @@ ipcMain.handle('check-onchain-subscription', async (event, walletAddress) => {
     const now = Date.now();
     const expired = now >= endTime;
     
-    console.log('📋 On-chain subscription:');
-    console.log('   Plan:', planName);
-    console.log('   Escrow:', escrowLamports / 1e9, 'SOL');
-    console.log('   Expires:', new Date(endTime).toISOString());
-    console.log('   Expired:', expired);
-    console.log('   State:', state === 0 ? 'Active' : state === 1 ? 'Claimed' : 'Cancelled');
     
     return {
       success: true,
@@ -1723,7 +1873,6 @@ ipcMain.handle('check-onchain-subscription', async (event, walletAddress) => {
 // ============= ON-CHAIN CLAIM EARNINGS =============
 // Claim earnings from on-chain session (calls claim_payout instruction)
 ipcMain.handle('claim-earnings-onchain', async (event, { walletAddress, sessionPDA }) => {
-  console.log('💰 Claiming earnings on-chain for:', walletAddress);
   
   try {
     // Load provider wallet (for signing)
@@ -1761,7 +1910,6 @@ ipcMain.handle('claim-earnings-onchain', async (event, { walletAddress, sessionP
     // If sessionPDA is provided, claim that specific session
     // Otherwise, we need to find active sessions
     if (!sessionPDA) {
-      console.log('⚠️ No session PDA provided, simulating claim...');
       
       // For now, just return simulated success
       // In production, you'd query the program for claimable sessions
@@ -1795,7 +1943,6 @@ ipcMain.handle('claim-earnings-onchain', async (event, { walletAddress, sessionP
     const tx = new Transaction().add(instruction);
     const sig = await sendAndConfirmTransaction(connection, tx, [providerWallet]);
     
-    console.log('✅ Claim successful! Tx:', sig);
     
     return {
       success: true,
@@ -1812,7 +1959,6 @@ ipcMain.handle('claim-earnings-onchain', async (event, { walletAddress, sessionP
 
 // Get on-chain provider stats
 ipcMain.handle('get-onchain-provider-stats', async (event, walletAddress) => {
-  console.log('📊 Getting on-chain provider stats for:', walletAddress);
   
   try {
     const programId = new PublicKey(PROGRAM_ID);
@@ -1852,10 +1998,269 @@ ipcMain.handle('get-onchain-provider-stats', async (event, walletAddress) => {
   }
 });
 
+// ============= GET ALL ESCROW BALANCES FOR PROVIDER =============
+// Fetch escrow accounts - subscriptions that can be claimed by providers
+ipcMain.handle('get-provider-escrow-balance', async (event, walletAddress) => {
+  
+  try {
+    const programId = new PublicKey(PROGRAM_ID);
+    const providerPubkey = new PublicKey(walletAddress);
+    
+    // Derive provider PDA
+    const [providerPda] = PublicKey.findProgramAddressSync(
+      [PROVIDER_SEED, providerPubkey.toBuffer()],
+      programId
+    );
+    
+    // Get ALL program accounts
+    const allAccounts = await connection.getProgramAccounts(programId);
+    
+    // Find provider account and check if they have nodes
+    let hasProvider = false;
+    let hasNode = false;
+    let myNodeCount = 0;
+    let myNodePubkeys = []; // Track our node pubkeys
+    let myNodeEndpoints = []; // Track our node endpoints
+    let subscriptionAccounts = [];
+    let totalSubscriptionEscrow = 0;
+    
+    // Discriminators
+    const SUBSCRIPTION_DISCRIMINATOR = '40071a8766846221';
+    
+    // First pass: find provider and nodes
+    for (const account of allAccounts) {
+      const data = account.account.data;
+      const size = data.length;
+      
+      // Check if this is the provider account (has our wallet as authority)
+      if (size >= 40 && size < 100) {
+        try {
+          const authorityKey = new PublicKey(data.slice(8, 40)).toBase58();
+          if (authorityKey === walletAddress) {
+            hasProvider = true;
+          }
+        } catch (e) {}
+      }
+      
+      // Check if this is a Node account owned by our provider PDA
+      if (size >= 100 && size < 500) {
+        try {
+          const nodeProviderKey = new PublicKey(data.slice(8, 40)).toBase58();
+          if (nodeProviderKey === providerPda.toBase58()) {
+            hasNode = true;
+            myNodeCount++;
+            myNodePubkeys.push(account.pubkey.toBase58());
+            
+            // Try to extract endpoint from node data
+            // Node structure: 8 disc + 32 provider + 8 node_id + string endpoint...
+            try {
+              const endpointLen = data.readUInt32LE(48);
+              if (endpointLen > 0 && endpointLen < 100) {
+                const endpoint = data.slice(52, 52 + endpointLen).toString('utf8');
+                myNodeEndpoints.push(endpoint);
+              }
+            } catch (e) {
+            }
+          }
+        } catch (e) {}
+      }
+      
+      // Count subscriptions
+      const discriminator = data.slice(0, 8).toString('hex');
+      const balance = account.account.lamports;
+      if (discriminator === SUBSCRIPTION_DISCRIMINATOR && balance > 1000000) {
+        subscriptionAccounts.push({
+          pubkey: account.pubkey.toBase58(),
+          balance: balance / LAMPORTS_PER_SOL,
+          balanceLamports: balance
+        });
+        totalSubscriptionEscrow += balance;
+      }
+    }
+    
+    // ========================================
+    // USAGE-BASED REWARD CALCULATION
+    // Get sessions from IPFS to calculate fair share
+    // ========================================
+    let mySessions = 0;
+    let totalNetworkSessions = 0;
+    let myUsageSeconds = 0;
+    let totalNetworkUsageSeconds = 0;
+    
+    try {
+      // Fetch sessions from IPFS
+      const fetch = require('node-fetch');
+      const IPFS_GATEWAYS = [
+        'https://w3s.link/ipfs/',
+        'https://gateway.pinata.cloud/ipfs/',
+        'https://cf-ipfs.com/ipfs/'
+      ];
+      
+      // Get sessions CID from registry or use known CID
+      const SESSIONS_CID = 'bafkreic7h5i4qijwkxjxq6q7j6q4xqxqxq7j6q4x'; // Will try to fetch dynamically
+      
+      // Try to get sessions from IPFS registry
+      let sessions = [];
+      for (const gateway of IPFS_GATEWAYS) {
+        try {
+          // First try to get the sessions registry
+          const registryResponse = await fetch(`${gateway}QmWshwhqU236FVSmEA1aKgDeEHZuFebUF7ibJ5an9hn7My`, { timeout: 5000 });
+          if (registryResponse.ok) {
+            const registry = await registryResponse.json();
+            // Get nodes and their providers
+            const allNodes = registry.nodes || [];
+            
+            // Match nodes to this provider by wallet
+            const myIPFSNodes = allNodes.filter(n => n.provider === walletAddress);
+            myIPFSNodes.forEach(n => {
+              if (n.endpoint && !myNodeEndpoints.includes(n.endpoint)) {
+                myNodeEndpoints.push(n.endpoint);
+              }
+            });
+            break;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+      
+      // Fetch sessions from local indexer if available
+      try {
+        const indexerResponse = await fetch('http://localhost:3001/api/sessions', { timeout: 3000 });
+        if (indexerResponse.ok) {
+          sessions = await indexerResponse.json();
+        }
+      } catch (e) {
+      }
+      
+      // If no sessions from indexer, fetch from IPFS
+      if (!sessions || sessions.length === 0) {
+        try {
+          // First get the latest sessions CID from Pinata
+          const pinataResponse = await fetch(
+            'https://api.pinata.cloud/data/pinList?status=pinned&metadata[name]=gvpn-sessions&pageLimit=1',
+            {
+              headers: {
+                'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiI0ODkyYjA3YS05MWZhLTQxYTYtOWNkYS1kZWY3MWM4ZTAzOTciLCJlbWFpbCI6ImJlc3R0ZWNob25jaGFpbkBnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGluX3BvbGljeSI6eyJyZWdpb25zIjpbeyJkZXNpcmVkUmVwbGljYXRpb25Db3VudCI6MSwiaWQiOiJGUkExIn0seyJkZXNpcmVkUmVwbGljYXRpb25Db3VudCI6MSwiaWQiOiJOWUMxIn1dLCJ2ZXJzaW9uIjoxfSwibWZhX2VuYWJsZWQiOmZhbHNlLCJzdGF0dXMiOiJBQ1RJVkUifSwiYXV0aGVudGljYXRpb25UeXBlIjoic2NvcGVkS2V5Iiwic2NvcGVkS2V5S2V5IjoiYzllYjAyODFhODllNjBiY2YwYjgiLCJzY29wZWRLZXlTZWNyZXQiOiJjYTg2ZGQxYmM5OTYxYzIwNDk1Zjg5NDg5OTgzMTk1OTljM2FmYjZmMWEwNDU3MjZjYjE5Y2VlYjM5Yzg1OTQzIiwiZXhwIjoxODAwNjI5ODQ0fQ.av5ETqtwPQE-XyzLFsTXN06qwi6IPn0Ic-YIzwW3Rr0'
+              },
+              timeout: 5000
+            }
+          );
+          
+          if (pinataResponse.ok) {
+            const pinData = await pinataResponse.json();
+            if (pinData.rows && pinData.rows.length > 0) {
+              const latestCID = pinData.rows[0].ipfs_pin_hash;
+              
+              // Fetch sessions from IPFS gateway
+              for (const gateway of IPFS_GATEWAYS) {
+                try {
+                  const sessionsResponse = await fetch(`${gateway}${latestCID}`, { timeout: 10000 });
+                  if (sessionsResponse.ok) {
+                    const sessionsData = await sessionsResponse.json();
+                    sessions = sessionsData.sessions || [];
+                    break;
+                  }
+                } catch (err) {
+                  continue;
+                }
+              }
+            }
+          }
+        } catch (ipfsErr) {
+        }
+      }
+      
+      // Count sessions per node
+      if (sessions && sessions.length > 0) {
+        totalNetworkSessions = sessions.length;
+        
+        for (const session of sessions) {
+          // Check if session belongs to this provider
+          const sessionEndpoint = session.node_endpoint || session.endpoint || '';
+          const sessionProvider = session.node_provider || session.provider || '';
+          const sessionDuration = session.duration_seconds || session.durationSeconds || 0;
+          
+          const isMySession = 
+            sessionProvider === walletAddress ||
+            myNodeEndpoints.some(ep => sessionEndpoint.includes(ep) || ep.includes(sessionEndpoint));
+          
+          totalNetworkUsageSeconds += sessionDuration;
+          
+          if (isMySession) {
+            mySessions++;
+            myUsageSeconds += sessionDuration;
+          }
+        }
+      }
+    } catch (e) {
+    }
+    
+    // ========================================
+    // CALCULATE FAIR SHARE BASED ON USAGE
+    // ========================================
+    const treasuryShare = totalSubscriptionEscrow * 0.2;
+    const totalProviderPool = totalSubscriptionEscrow * 0.8;
+    
+    let myShare = 0;
+    let shareReason = '';
+    
+    if (!hasNode) {
+      // No on-chain node = no rewards
+      myShare = 0;
+      shareReason = 'No on-chain node registered';
+    } else if (totalNetworkSessions > 0 && mySessions > 0) {
+      // Usage-based: your sessions / total sessions
+      myShare = totalProviderPool * (mySessions / totalNetworkSessions);
+      shareReason = `${mySessions}/${totalNetworkSessions} sessions (${((mySessions/totalNetworkSessions)*100).toFixed(1)}%)`;
+    } else if (mySessions === 0 && totalNetworkSessions > 0) {
+      // You have node but no sessions = no rewards
+      myShare = 0;
+      shareReason = '0 sessions served (other nodes served all users)';
+    } else {
+      // No session data available, fallback to node-based split
+      const networkNodeCount = allAccounts.filter(a => a.account.data.length >= 100 && a.account.data.length < 500).length;
+      myShare = networkNodeCount > 0 ? (totalProviderPool * myNodeCount / networkNodeCount) : totalProviderPool;
+      shareReason = `${myNodeCount}/${networkNodeCount} nodes (no session data)`;
+    }
+    
+    
+    return {
+      success: true,
+      hasProvider: hasProvider,
+      hasOnchainNode: hasNode,
+      myNodeCount: myNodeCount,
+      // Session-based stats
+      mySessions: mySessions,
+      totalNetworkSessions: totalNetworkSessions,
+      myUsageSeconds: myUsageSeconds,
+      shareReason: shareReason,
+      // Total network subscription escrow
+      totalEscrowLamports: totalSubscriptionEscrow,
+      totalEscrowSol: totalSubscriptionEscrow / LAMPORTS_PER_SOL,
+      // Provider's usage-based share
+      providerShareLamports: Math.floor(myShare),
+      providerShareSol: myShare / LAMPORTS_PER_SOL,
+      treasuryShareLamports: treasuryShare,
+      treasuryShareSol: treasuryShare / LAMPORTS_PER_SOL,
+      accountCount: subscriptionAccounts.length,
+      accounts: subscriptionAccounts,
+      networkTotalEscrow: totalSubscriptionEscrow / LAMPORTS_PER_SOL,
+      // Important message if no on-chain node
+      message: !hasNode 
+        ? 'You need to register a node ON-CHAIN (not just IPFS) to claim subscription rewards. Use the Solana program to register your node.'
+        : null
+    };
+    
+  } catch (error) {
+    console.error('❌ Get escrow balance error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // ============= CLAIM SUBSCRIPTION EARNINGS (On-chain) =============
 // Provider claims their 80% share from a subscription
 ipcMain.handle('claim-subscription-onchain', async (event, { subscriptionUserWallet }) => {
-  console.log('💰 Claiming subscription earnings for user:', subscriptionUserWallet);
   
   try {
     const { TransactionInstruction, Transaction, sendAndConfirmTransaction } = require('@solana/web3.js');
@@ -1891,8 +2296,6 @@ ipcMain.handle('claim-subscription-onchain', async (event, { subscriptionUserWal
     
     // Check subscription balance
     const subBalance = await connection.getBalance(subscriptionPda);
-    console.log('📍 Subscription PDA:', subscriptionPda.toBase58());
-    console.log('💰 Subscription escrow balance:', subBalance / LAMPORTS_PER_SOL, 'SOL');
     
     if (subBalance === 0) {
       return {
@@ -1922,9 +2325,6 @@ ipcMain.handle('claim-subscription-onchain', async (event, { subscriptionUserWal
     const providerShare = (subBalance * 0.8) / LAMPORTS_PER_SOL;
     const treasuryShare = (subBalance * 0.2) / LAMPORTS_PER_SOL;
     
-    console.log('✅ Subscription claimed! Tx:', sig);
-    console.log('   Provider received:', providerShare.toFixed(6), 'SOL (80%)');
-    console.log('   Treasury received:', treasuryShare.toFixed(6), 'SOL (20%)');
     
     return {
       success: true,
@@ -1946,8 +2346,6 @@ const activeOnchainSessions = new Map();
 
 // Create on-chain session (open_session instruction) - user pays SOL to escrow
 ipcMain.handle('create-onchain-session', async (event, { userWallet, nodeEndpoint, minutes, pricePerMinute }) => {
-  console.log('🔗 Creating on-chain session for:', userWallet);
-  console.log('   Node:', nodeEndpoint, 'Minutes:', minutes, 'Price/min:', pricePerMinute);
   
   try {
     const { TransactionInstruction, Transaction } = require('@solana/web3.js');
@@ -1976,11 +2374,9 @@ ipcMain.handle('create-onchain-session', async (event, { userWallet, nodeEndpoin
       programId
     );
     
-    console.log('📝 Session PDA:', sessionPda.toBase58());
     
     // Calculate cost in lamports
     const cost = BigInt(minutes) * BigInt(pricePerMinute);
-    console.log('💰 Session cost:', cost.toString(), 'lamports (', (Number(cost) / 1e9).toFixed(6), 'SOL)');
     
     // Build open_session instruction data
     // Discriminator (8 bytes) + session_id (u64, 8 bytes) + minutes (u32, 4 bytes)
@@ -2042,7 +2438,6 @@ ipcMain.handle('create-onchain-session', async (event, { userWallet, nodeEndpoin
 
 // Close on-chain session (close_session instruction) - refunds unused time
 ipcMain.handle('close-onchain-session', async (event, { userWallet, sessionPda }) => {
-  console.log('🔒 Closing on-chain session:', sessionPda);
   
   try {
     const { TransactionInstruction, Transaction } = require('@solana/web3.js');

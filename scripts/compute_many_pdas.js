@@ -31,10 +31,8 @@ for (const b of bases) for (const s of seconds) for (const i of ids) {
     try {
       const [p] = await PublicKey.findProgramAddress(v, programId);
       if (p.toBase58()===target) {
-        console.log('FOUND', v.map(x=>x.toString('hex').slice(0,16)), p.toBase58());
         return;
       }
     } catch(e){}
   }
-  console.log('not found');
 })();

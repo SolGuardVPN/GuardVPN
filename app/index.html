@@ -99,7 +99,7 @@
               </div>
               <div class="wallet-option-info">
                 <div class="wallet-option-title">Phantom Wallet</div>
-                <div class="wallet-option-desc">Connect with Phantom <span class="network-tag mainnet">🟢 Mainnet</span></div>
+                <div class="wallet-option-desc">Connect with Phantom <span class="network-tag testnet">🧪 Devnet</span></div>
               </div>
             </button>
             
@@ -145,7 +145,7 @@
               <span class="code-label">Have a subscription code?</span>
             </div>
             <div class="code-input-wrapper">
-              <input type="text" id="subscriptionCodeInput" placeholder="Enter your code (e.g., DVPN-XXXX-XXXX)" class="code-input">
+              <input type="text" id="subscriptionCodeInput" placeholder="Enter your code (e.g., GVPN-XXXX-XXXX)" class="code-input">
               <button class="btn-apply-code" id="applyCodeBtn">Apply</button>
             </div>
             <div class="code-message" id="codeMessage"></div>
@@ -435,8 +435,9 @@
               <div class="stat-card">
                 <div class="stat-icon">💰</div>
                 <div class="stat-value" id="providerEarnings">0 SOL</div>
-                <div class="stat-label">Pending Earnings</div>
-                <button class="btn-claim" id="claimEarningsBtn" title="On-chain claiming requires program deployment">
+                <div class="stat-label">MY REWARDS</div>
+                <div class="stat-sublabel" id="providerNodeCount" style="font-size: 0.7rem; color: #888;">0 nodes</div>
+                <button class="btn-claim" id="claimEarningsBtn" title="Claim your share from user subscriptions">
                   Withdraw
                 </button>
               </div>

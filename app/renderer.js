@@ -72,6 +72,59 @@ const state = {
 };
 
 // ============================================
+// Global Function: Register Node On-Chain
+// Defined early so it's available when buttons are clicked
+// ============================================
+async function registerNodeOnChain(endpoint, location, wgPubkey, priceLamports) {
+  
+  if (!state.wallet) {
+    showToast('Please connect your wallet first', 'error');
+    return;
+  }
+  
+  const confirmed = confirm(
+    `🔗 REGISTER NODE ON SOLANA BLOCKCHAIN\n\n` +
+    `This will create an on-chain node account so you can:\n` +
+    `• Claim 80% of subscription payments\n` +
+    `• Receive rewards from user escrow\n\n` +
+    `Node: ${endpoint}\n` +
+    `Location: ${location}\n\n` +
+    `This requires a small SOL fee (~0.003 SOL).\n\n` +
+    `Proceed?`
+  );
+  
+  if (!confirmed) return;
+  
+  showToast('🔗 Opening Phantom to sign transaction...', 'info');
+  
+  try {
+    // Use Phantom to sign the transaction
+    const result = await window.electron.registerNodePhantom({
+      walletAddress: state.wallet,
+      endpoint: endpoint,
+      location: location,
+      region: location.toLowerCase().replace(/[^a-z]/g, '-').substring(0, 12),
+      pricePerHour: priceLamports / 1e9, // Convert lamports to SOL
+      wgPublicKey: wgPubkey || ''
+    });
+    
+    if (result.success) {
+      showToast('✅ Node registered on-chain!', 'success');
+      await loadProviderStats();
+      await displayProviderNodes();
+    } else {
+      showToast('❌ On-chain registration failed: ' + result.error, 'error');
+    }
+  } catch (error) {
+    console.error('On-chain registration error:', error);
+    showToast('❌ Error: ' + error.message, 'error');
+  }
+}
+
+// Also expose on window for compatibility
+window.registerNodeOnChain = registerNodeOnChain;
+
+// ============================================
 // Network Switching Functions
 // ============================================
 
@@ -92,15 +145,11 @@ async function switchNetwork(network) {
   CONFIG.isTestMode = netConfig.isTestMode;
   CONFIG.networkName = netConfig.name;
   
-  console.log(`🌐 Switched to ${netConfig.name}`);
-  console.log(`   RPC: ${netConfig.rpcUrl}`);
-  console.log(`   Program: ${netConfig.programId}`);
   
   // Also notify main process to switch network
   if (window.electron && window.electron.switchNetwork) {
     try {
       await window.electron.switchNetwork(network);
-      console.log(`✅ Main process also switched to ${network}`);
     } catch (e) {
       console.warn('Could not sync network with main process:', e.message);
     }
@@ -152,18 +201,16 @@ const CACHE_TTL = 30000; // 30 seconds cache
 
 // Get the latest registry CID from Pinata (to always get the most up-to-date node list)
 async function fetchLatestRegistryCID() {
-  console.log('🔍 Fetching latest registry CID from Pinata...');
   
   // Check cache first (valid for 30 seconds)
   if (Date.now() - lastIPFSFetch.registry < CACHE_TTL && IPFS_DATA_CIDS.registry) {
-    console.log('📦 Using cached registry CID:', IPFS_DATA_CIDS.registry);
     return IPFS_DATA_CIDS.registry;
   }
   
   try {
     // Query Pinata for the latest vpn-registry pin
     const response = await fetch(
-      'https://api.pinata.cloud/data/pinList?status=pinned&metadata[name]=dvpn-nodes-registry&pageLimit=1',
+      'https://api.pinata.cloud/data/pinList?status=pinned&metadata[name]=gvpn-nodes-registry&pageLimit=1',
       {
         headers: {
           'Authorization': `Bearer ${CONFIG.pinataJWT}`
@@ -179,8 +226,6 @@ async function fetchLatestRegistryCID() {
         const latestPin = data.rows[0];
         const latestCID = latestPin.ipfs_pin_hash;
         
-        console.log('✅ Found latest registry CID:', latestCID);
-        console.log('   Pinned at:', latestPin.date_pinned);
         
         // Update cache
         IPFS_DATA_CIDS.registry = latestCID;
@@ -197,19 +242,162 @@ async function fetchLatestRegistryCID() {
   }
   
   // Fallback to hardcoded CID
-  console.log('⚠️ Using fallback registry CID:', CONFIG.ipfsRegistryCID);
   return CONFIG.ipfsRegistryCID;
 }
 
 // ============================================
-// IPFS Sessions Storage
+// IPFS Sessions Storage (with historical accumulation)
 // ============================================
+
+// Cache for all historical sessions (merged from all CIDs)
+let allMergedSessionsCache = [];
+let lastAllSessionsFetch = 0;
+const ALL_SESSIONS_CACHE_TTL = 60000; // 1 minute cache for merged sessions
+
+// Fetch ALL session CIDs from Pinata history (to accumulate rewards)
+async function fetchAllSessionsCIDs() {
+  
+  try {
+    // Query Pinata for ALL gvpn-sessions pins (get history)
+    const response = await fetch(
+      'https://api.pinata.cloud/data/pinList?status=pinned&metadata[name]=gvpn-sessions&pageLimit=100',
+      {
+        headers: {
+          'Authorization': `Bearer ${CONFIG.pinataJWT}`
+        }
+      }
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      if (data.rows && data.rows.length > 0) {
+        const cids = data.rows.map(pin => ({
+          cid: pin.ipfs_pin_hash,
+          date: pin.date_pinned
+        }));
+        return cids;
+      }
+    }
+  } catch (error) {
+    console.error('❌ Failed to fetch session CIDs:', error.message);
+  }
+  
+  return [];
+}
+
+// Fetch sessions from a specific CID
+async function fetchSessionsFromCID(cid) {
+  for (const gateway of CONFIG.ipfsGateways) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      
+      const response = await fetch(`${gateway}${cid}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const data = await response.json();
+        return data.sessions || [];
+      }
+    } catch (error) {
+      // Try next gateway
+    }
+  }
+  return [];
+}
+
+// Fetch and merge ALL sessions from ALL historical CIDs
+async function fetchAllMergedSessions() {
+  // Check cache first
+  if (Date.now() - lastAllSessionsFetch < ALL_SESSIONS_CACHE_TTL && allMergedSessionsCache.length > 0) {
+    return allMergedSessionsCache;
+  }
+  
+  
+  const allCIDs = await fetchAllSessionsCIDs();
+  const sessionMap = new Map(); // Use Map to deduplicate by session ID
+  
+  // Fetch sessions from all CIDs in parallel (max 5 at a time)
+  for (let i = 0; i < allCIDs.length; i += 5) {
+    const batch = allCIDs.slice(i, i + 5);
+    const results = await Promise.all(
+      batch.map(({ cid }) => fetchSessionsFromCID(cid))
+    );
+    
+    results.forEach(sessions => {
+      sessions.forEach(session => {
+        const id = session.id || session.session_id;
+        if (id) {
+          // Keep the most recent version of each session (by end_time or updated fields)
+          const existing = sessionMap.get(id);
+          if (!existing || 
+              (session.end_time && !existing.end_time) || 
+              (session.duration_seconds && !existing.duration_seconds)) {
+            sessionMap.set(id, session);
+          }
+        }
+      });
+    });
+  }
+  
+  allMergedSessionsCache = Array.from(sessionMap.values());
+  lastAllSessionsFetch = Date.now();
+  
+  return allMergedSessionsCache;
+}
+
+// Fetch the latest sessions CID from Pinata (shared globally)
+async function fetchLatestSessionsCID() {
+  
+  try {
+    // Query Pinata for the latest gvpn-sessions pin
+    const response = await fetch(
+      'https://api.pinata.cloud/data/pinList?status=pinned&metadata[name]=gvpn-sessions&pageLimit=1',
+      {
+        headers: {
+          'Authorization': `Bearer ${CONFIG.pinataJWT}`
+        }
+      }
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      if (data.rows && data.rows.length > 0) {
+        const latestPin = data.rows[0];
+        const latestCID = latestPin.ipfs_pin_hash;
+        
+        IPFS_DATA_CIDS.sessions = latestCID;
+        localStorage.setItem('gvpn_sessions_cid', latestCID);
+        return latestCID;
+      }
+    }
+  } catch (error) {
+    console.error('❌ Failed to fetch latest sessions CID:', error.message);
+  }
+  
+  return localStorage.getItem('gvpn_sessions_cid');
+}
 
 // Fetch sessions from IPFS
 async function fetchSessionsFromIPFS() {
-  const cid = IPFS_DATA_CIDS.sessions || localStorage.getItem('dvpn_sessions_cid');
+  // First, try to get the latest sessions CID from Pinata (shared globally)
+  let cid = IPFS_DATA_CIDS.sessions;
+  
+  // Refresh CID from Pinata periodically or if not cached
+  if (!cid || Date.now() - lastIPFSFetch.sessions > CACHE_TTL) {
+    cid = await fetchLatestSessionsCID();
+  }
+  
   if (!cid) {
-    console.log('📭 No sessions CID found, starting fresh');
+    cid = localStorage.getItem('gvpn_sessions_cid');
+  }
+  
+  if (!cid) {
+    return [];
+  }
+  if (!cid) {
     return [];
   }
   
@@ -218,7 +406,6 @@ async function fetchSessionsFromIPFS() {
     return ipfsSessionsCache;
   }
   
-  console.log('📥 Fetching sessions from IPFS:', cid);
   
   for (const gateway of CONFIG.ipfsGateways) {
     try {
@@ -232,11 +419,9 @@ async function fetchSessionsFromIPFS() {
         const data = await response.json();
         ipfsSessionsCache = data.sessions || [];
         lastIPFSFetch.sessions = Date.now();
-        console.log('✅ Fetched', ipfsSessionsCache.length, 'sessions from IPFS');
         return ipfsSessionsCache;
       }
     } catch (error) {
-      console.log(`❌ Gateway ${gateway} failed for sessions:`, error.message);
     }
   }
   
@@ -245,19 +430,18 @@ async function fetchSessionsFromIPFS() {
 
 // Publish sessions to IPFS
 async function publishSessionsToIPFS(sessions) {
-  console.log('📤 Publishing', sessions.length, 'sessions to IPFS...');
   
   const payload = {
     pinataContent: {
-      name: 'DVPN Sessions',
+      name: 'GVPN Sessions',
       version: '1.0',
       updated_at: new Date().toISOString(),
       sessions: sessions
     },
     pinataMetadata: {
-      name: 'dvpn-sessions',
+      name: 'gvpn-sessions',
       keyvalues: {
-        type: 'dvpn-sessions',
+        type: 'gvpn-sessions',
         count: sessions.length.toString(),
         updated: new Date().toISOString()
       }
@@ -276,9 +460,8 @@ async function publishSessionsToIPFS(sessions) {
     
     if (response.ok) {
       const result = await response.json();
-      console.log('✅ Sessions published to IPFS:', result.IpfsHash);
       IPFS_DATA_CIDS.sessions = result.IpfsHash;
-      localStorage.setItem('dvpn_sessions_cid', result.IpfsHash);
+      localStorage.setItem('gvpn_sessions_cid', result.IpfsHash);
       ipfsSessionsCache = sessions;
       lastIPFSFetch.sessions = Date.now();
       return { success: true, cid: result.IpfsHash };
@@ -315,7 +498,6 @@ async function createLocalSession(nodeData, userWallet) {
   
   sessions.push(newSession);
   await publishSessionsToIPFS(sessions);
-  console.log('✅ Session created on IPFS:', sessionId);
   return newSession;
 }
 
@@ -336,7 +518,6 @@ async function endLocalSession(sessionId) {
     session.bytes_used = Math.floor(Math.random() * 100000000) + 1000000;
     
     await publishSessionsToIPFS(sessions);
-    console.log('✅ Session ended on IPFS:', sessionId);
     return session;
   }
   return null;
@@ -359,7 +540,6 @@ async function endLocalSessionsByWallet(wallet) {
   if (endedCount > 0) {
     await publishSessionsToIPFS(sessions);
   }
-  console.log(`✅ Ended ${endedCount} sessions for wallet on IPFS:`, wallet);
   return endedCount;
 }
 
@@ -376,11 +556,53 @@ async function getLocalSessions(wallet = null) {
 // IPFS Earnings & Withdrawals Storage
 // ============================================
 
+// Fetch the latest earnings CID from Pinata (shared globally)
+async function fetchLatestEarningsCID() {
+  
+  try {
+    const response = await fetch(
+      'https://api.pinata.cloud/data/pinList?status=pinned&metadata[name]=gvpn-earnings&pageLimit=1',
+      {
+        headers: {
+          'Authorization': `Bearer ${CONFIG.pinataJWT}`
+        }
+      }
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      if (data.rows && data.rows.length > 0) {
+        const latestPin = data.rows[0];
+        const latestCID = latestPin.ipfs_pin_hash;
+        
+        IPFS_DATA_CIDS.earnings = latestCID;
+        localStorage.setItem('gvpn_earnings_cid', latestCID);
+        return latestCID;
+      }
+    }
+  } catch (error) {
+    console.error('❌ Failed to fetch latest earnings CID:', error.message);
+  }
+  
+  return localStorage.getItem('gvpn_earnings_cid');
+}
+
 // Fetch earnings from IPFS
 async function fetchEarningsFromIPFS() {
-  const cid = IPFS_DATA_CIDS.earnings || localStorage.getItem('dvpn_earnings_cid');
+  // First, try to get the latest earnings CID from Pinata (shared globally)
+  let cid = IPFS_DATA_CIDS.earnings;
+  
+  // Refresh CID from Pinata periodically or if not cached
+  if (!cid || Date.now() - lastIPFSFetch.earnings > CACHE_TTL) {
+    cid = await fetchLatestEarningsCID();
+  }
+  
   if (!cid) {
-    console.log('📭 No earnings CID found, starting fresh');
+    cid = localStorage.getItem('gvpn_earnings_cid');
+  }
+  
+  if (!cid) {
     return {};
   }
   
@@ -389,7 +611,6 @@ async function fetchEarningsFromIPFS() {
     return ipfsEarningsCache;
   }
   
-  console.log('📥 Fetching earnings from IPFS:', cid);
   
   for (const gateway of CONFIG.ipfsGateways) {
     try {
@@ -403,11 +624,9 @@ async function fetchEarningsFromIPFS() {
         const data = await response.json();
         ipfsEarningsCache = data.earnings || {};
         lastIPFSFetch.earnings = Date.now();
-        console.log('✅ Fetched earnings from IPFS');
         return ipfsEarningsCache;
       }
     } catch (error) {
-      console.log(`❌ Gateway ${gateway} failed for earnings:`, error.message);
     }
   }
   
@@ -416,19 +635,18 @@ async function fetchEarningsFromIPFS() {
 
 // Publish earnings to IPFS
 async function publishEarningsToIPFS(earnings) {
-  console.log('📤 Publishing earnings to IPFS...');
   
   const payload = {
     pinataContent: {
-      name: 'DVPN Earnings',
+      name: 'GVPN Earnings',
       version: '1.0',
       updated_at: new Date().toISOString(),
       earnings: earnings
     },
     pinataMetadata: {
-      name: 'dvpn-earnings',
+      name: 'gvpn-earnings',
       keyvalues: {
-        type: 'dvpn-earnings',
+        type: 'gvpn-earnings',
         updated: new Date().toISOString()
       }
     }
@@ -446,9 +664,8 @@ async function publishEarningsToIPFS(earnings) {
     
     if (response.ok) {
       const result = await response.json();
-      console.log('✅ Earnings published to IPFS:', result.IpfsHash);
       IPFS_DATA_CIDS.earnings = result.IpfsHash;
-      localStorage.setItem('dvpn_earnings_cid', result.IpfsHash);
+      localStorage.setItem('gvpn_earnings_cid', result.IpfsHash);
       ipfsEarningsCache = earnings;
       lastIPFSFetch.earnings = Date.now();
       return { success: true, cid: result.IpfsHash };
@@ -463,52 +680,151 @@ async function publishEarningsToIPFS(earnings) {
   }
 }
 
-// Get provider earnings (from IPFS)
+// Get provider earnings (from ON-CHAIN ESCROW - subscription-based rewards)
+// Rewards come from actual user subscription payments, NOT time-based calculation
 async function getProviderEarnings(wallet) {
+  
+  // First, try to get actual on-chain escrow balance
+  let onchainEscrow = null;
+  if (window.electron && window.electron.getProviderEscrowBalance) {
+    try {
+      onchainEscrow = await window.electron.getProviderEscrowBalance(wallet);
+    } catch (e) {
+    }
+  }
+  
+  // Get session count from IPFS for stats display
+  const sessions = await fetchAllMergedSessions();
+  const allNodes = await getAllNodesFromIPFS();
+  const myNodeEndpoints = allNodes.filter(n => n.provider === wallet).map(n => n.endpoint);
+  
+  const allProviderSessions = sessions.filter(s => 
+    s.node_provider === wallet || 
+    s.provider === wallet ||
+    myNodeEndpoints.includes(s.node_endpoint)
+  );
+  
+  const activeSessions = allProviderSessions.filter(s => s.is_active).length;
+  
+  // Get withdrawal history from IPFS
   const earnings = await fetchEarningsFromIPFS();
-  const sessions = await getLocalSessions(wallet);
-  
-  // Calculate earnings from sessions
-  const providerSessions = sessions.filter(s => s.node_provider === wallet);
-  const totalEarned = providerSessions.reduce((sum, s) => {
-    // Calculate based on session duration (0.001 SOL per minute)
-    const duration = s.duration_seconds || 0;
-    return sum + (duration / 60) * 0.001 * 1e9; // in lamports
-  }, 0);
-  
   const withdrawn = earnings[wallet]?.withdrawn || 0;
-  const available = Math.max(0, totalEarned - withdrawn);
+  
+  // If we have on-chain escrow data, use it (REAL SOL)
+  if (onchainEscrow && onchainEscrow.success) {
+    const providerShareLamports = onchainEscrow.providerShareLamports || 0;
+    const totalEscrowLamports = onchainEscrow.totalEscrowLamports || 0;
+    const hasOnchainNode = onchainEscrow.hasOnchainNode || false;
+    
+    
+    if (!hasOnchainNode) {
+    }
+    
+    // Available = Provider's 80% share minus what's already withdrawn
+    const available = Math.max(0, providerShareLamports - withdrawn);
+    
+    return {
+      success: true,
+      source: hasOnchainNode ? 'onchain-escrow' : 'no-onchain-node',
+      hasOnchainNode: hasOnchainNode,
+      // Total subscription escrow in network
+      total_escrow: totalEscrowLamports,
+      total_escrow_sol: (totalEscrowLamports / 1e9).toFixed(4),
+      // Provider's claimable share (only if has on-chain node)
+      total_earned: providerShareLamports,
+      total_earned_sol: (providerShareLamports / 1e9).toFixed(4),
+      provider_share_percent: 80,
+      treasury_share_percent: 20,
+      withdrawn: withdrawn,
+      withdrawn_sol: (withdrawn / 1e9).toFixed(4),
+      available_balance: available,
+      available_balance_sol: (available / 1e9).toFixed(4),
+      total_sessions: allProviderSessions.length,
+      active_sessions: activeSessions,
+      escrow_accounts: onchainEscrow.accountCount || 0,
+      my_node_count: onchainEscrow.myNodeCount || 0,
+      // Network-wide stats for context
+      network_total_escrow_sol: onchainEscrow.networkTotalEscrow || 0,
+      // Message if no on-chain node
+      message: onchainEscrow.message
+    };
+  }
+  
+  // Fallback: If no on-chain escrow, show 0 (user needs real subscriptions)
   
   return {
     success: true,
-    total_earned: totalEarned,
-    total_earned_sol: (totalEarned / 1e9).toFixed(4),
+    source: 'no-escrow',
+    total_escrow: 0,
+    total_escrow_sol: '0.0000',
+    total_earned: 0,
+    total_earned_sol: '0.0000',
+    provider_share_percent: 80,
+    treasury_share_percent: 20,
     withdrawn: withdrawn,
     withdrawn_sol: (withdrawn / 1e9).toFixed(4),
-    available_balance: available,
-    available_balance_sol: (available / 1e9).toFixed(4),
-    total_sessions: providerSessions.length,
-    active_sessions: providerSessions.filter(s => s.is_active).length
+    available_balance: 0,
+    available_balance_sol: '0.0000',
+    total_sessions: allProviderSessions.length,
+    active_sessions: activeSessions,
+    escrow_accounts: 0,
+    message: 'No subscription payments in escrow. Users must pay for subscriptions on-chain to generate rewards.'
   };
 }
 
-// Record withdrawal (to IPFS)
-async function recordWithdrawal(wallet, amount) {
+// Record withdrawal (to IPFS) - also marks sessions as claimed
+async function recordWithdrawal(wallet, amount, sessionIds = null) {
   const earnings = await fetchEarningsFromIPFS();
   if (!earnings[wallet]) {
-    earnings[wallet] = { withdrawn: 0, withdrawals: [] };
+    earnings[wallet] = { withdrawn: 0, withdrawals: [], claimed_sessions: [] };
+  }
+  
+  // Ensure claimed_sessions array exists
+  if (!earnings[wallet].claimed_sessions) {
+    earnings[wallet].claimed_sessions = [];
   }
   
   earnings[wallet].withdrawn += amount;
   earnings[wallet].withdrawals.push({
     amount: amount,
     timestamp: new Date().toISOString(),
-    tx_signature: `ipfs_${Date.now()}`
+    tx_signature: `ipfs_${Date.now()}`,
+    sessions_claimed: sessionIds ? sessionIds.length : 0
   });
   
+  // Mark sessions as claimed (if session IDs provided)
+  if (sessionIds && sessionIds.length > 0) {
+    sessionIds.forEach(id => {
+      if (!earnings[wallet].claimed_sessions.includes(id)) {
+        earnings[wallet].claimed_sessions.push(id);
+      }
+    });
+  }
+  
   await publishEarningsToIPFS(earnings);
-  console.log('✅ Withdrawal recorded on IPFS:', amount / 1e9, 'SOL');
   return true;
+}
+
+// Get unclaimed session IDs for a wallet (helper for claim function)
+async function getUnclaimedSessionIds(wallet) {
+  const earnings = await fetchEarningsFromIPFS();
+  const sessions = await fetchAllMergedSessions();
+  const allNodes = await getAllNodesFromIPFS();
+  const myNodeEndpoints = allNodes.filter(n => n.provider === wallet).map(n => n.endpoint);
+  const claimedSessionIds = earnings[wallet]?.claimed_sessions || [];
+  
+  // Get unclaimed, completed sessions
+  const unclaimedSessions = sessions.filter(s => {
+    const sessionId = s.id || s.session_id;
+    const isMySession = s.node_provider === wallet || 
+                        s.provider === wallet ||
+                        myNodeEndpoints.includes(s.node_endpoint);
+    const isNotClaimed = !claimedSessionIds.includes(sessionId);
+    const isCompleted = !s.is_active && s.duration_seconds > 0;
+    return isMySession && isNotClaimed && isCompleted;
+  });
+  
+  return unclaimedSessions.map(s => s.id || s.session_id);
 }
 
 // Rate a node (update on IPFS)
@@ -526,7 +842,6 @@ async function rateNodeLocally(nodeId, rating, wallet) {
     // Update IPFS registry
     const result = await publishRegistryToPinata(nodes);
     if (result.success) {
-      console.log('✅ Node rating updated on IPFS');
       return { success: true, new_rating: node.rating_avg };
     }
   }
@@ -540,11 +855,10 @@ async function rateNodeLocally(nodeId, rating, wallet) {
 
 // Publish node directly to Pinata IPFS
 async function publishNodeToPinata(nodeData) {
-  console.log('📤 Publishing node to Pinata IPFS...');
   
   const payload = {
     pinataContent: {
-      name: 'DVPN Node',
+      name: 'GVPN Node',
       version: '1.0',
       type: 'vpn-node',
       published_at: new Date().toISOString(),
@@ -559,7 +873,7 @@ async function publishNodeToPinata(nodeData) {
       }
     },
     pinataMetadata: {
-      name: `dvpn-node-${nodeData.endpoint.replace(/[.:]/g, '-')}`,
+      name: `gvpn-node-${nodeData.endpoint.replace(/[.:]/g, '-')}`,
       keyvalues: {
         type: 'vpn-node',
         provider: nodeData.provider_wallet,
@@ -580,7 +894,6 @@ async function publishNodeToPinata(nodeData) {
     
     if (response.ok) {
       const result = await response.json();
-      console.log('✅ Node published to IPFS:', result.IpfsHash);
       return {
         success: true,
         cid: result.IpfsHash,
@@ -599,13 +912,11 @@ async function publishNodeToPinata(nodeData) {
 
 // Fetch node from Pinata IPFS
 async function fetchNodeFromIPFS(cid) {
-  console.log('📥 Fetching from IPFS:', cid);
   
   try {
     const response = await fetch(`${CONFIG.pinataGateway}${cid}`);
     if (response.ok) {
       const data = await response.json();
-      console.log('✅ Fetched from IPFS:', data);
       return { success: true, data };
     } else {
       return { success: false, error: 'Failed to fetch' };
@@ -618,7 +929,6 @@ async function fetchNodeFromIPFS(cid) {
 
 // List all pinned nodes from Pinata
 async function listPinnedNodes() {
-  console.log('📋 Listing pinned nodes from Pinata...');
   
   try {
     const response = await fetch('https://api.pinata.cloud/data/pinList?status=pinned&metadata[keyvalues][type]={"value":"vpn-node","op":"eq"}', {
@@ -629,7 +939,6 @@ async function listPinnedNodes() {
     
     if (response.ok) {
       const result = await response.json();
-      console.log(`✅ Found ${result.count} pinned nodes`);
       return {
         success: true,
         count: result.count,
@@ -668,7 +977,6 @@ async function getAllNodesFromIPFS() {
   for (const gateway of gateways) {
     try {
       const ipfsUrl = `${gateway}${CONFIG.ipfsRegistryCID}`;
-      console.log(`🌐 Fetching from: ${gateway}`);
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -700,7 +1008,6 @@ async function getAllNodesFromIPFS() {
         }
       }
     } catch (error) {
-      console.log(`❌ Gateway ${gateway} failed:`, error.message);
     }
   }
   
@@ -709,10 +1016,9 @@ async function getAllNodesFromIPFS() {
 
 // Publish updated node registry to Pinata IPFS
 async function publishRegistryToPinata(nodes) {
-  console.log('📤 Publishing node registry to Pinata IPFS...');
   
   const registry = {
-    name: 'DVPN Node Registry',
+    name: 'GVPN Node Registry',
     version: '1.0',
     updated_at: new Date().toISOString(),
     nodes: nodes.map(n => ({
@@ -731,7 +1037,7 @@ async function publishRegistryToPinata(nodes) {
   const payload = {
     pinataContent: registry,
     pinataMetadata: {
-      name: 'dvpn-nodes-registry',
+      name: 'gvpn-nodes-registry',
       keyvalues: {
         type: 'vpn-registry',
         version: '1.0',
@@ -752,7 +1058,6 @@ async function publishRegistryToPinata(nodes) {
     
     if (response.ok) {
       const result = await response.json();
-      console.log('✅ Registry published to IPFS:', result.IpfsHash);
       
       // Update config with new CID
       CONFIG.ipfsRegistryCID = result.IpfsHash;
@@ -775,13 +1080,11 @@ async function publishRegistryToPinata(nodes) {
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('Initializing DVPN Guard VPN App...');
   
   // Initialize IPFS in background
   if (window.electron && window.electron.initIPFS) {
     window.electron.initIPFS().then(result => {
       if (result.success) {
-        console.log('✅ IPFS initialized successfully');
       } else {
         console.warn('⚠️ IPFS initialization failed:', result.error);
       }
@@ -808,19 +1111,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Show onboarding - wallet connection page
   switchToTab('onboardingTab');
   
-  console.log('✅ App initialized - All data stored on IPFS Pinata');
 });
 
 // Set up listener for Phantom wallet callbacks
 function setupPhantomCallbackListener() {
   if (window.electron && window.electron.onPhantomCallback) {
     window.electron.onPhantomCallback(async (result) => {
-      console.log('Received Phantom callback:', result);
       
       if (result.success && result.publicKey) {
-        // Phantom = Mainnet mode
-        switchNetwork('mainnet');
-        showToast('🟢 Switched to Mainnet', 'info');
+        // Phantom = Devnet mode (testing)
+        switchNetwork('devnet');
+        showToast('🧪 Using Devnet', 'info');
         
         // Wallet connected successfully
         state.wallet = result.publicKey;
@@ -829,12 +1130,11 @@ function setupPhantomCallbackListener() {
         updateWalletDisplay();
         localStorage.setItem('walletPublicKey', result.publicKey);
         localStorage.setItem('walletType', 'phantom');
-        localStorage.setItem('networkMode', 'mainnet');
-        showToast('✅ Phantom wallet connected (Mainnet)!', 'success');
+        localStorage.setItem('networkMode', 'devnet');
+        showToast('✅ Phantom wallet connected (Devnet)!', 'success');
         
         // Check if user has active subscription (await since it's async)
         const hasSubscription = await checkActiveSubscription();
-        console.log('Has subscription:', hasSubscription);
         
         if (hasSubscription) {
           // Move to home tab
@@ -924,7 +1224,6 @@ async function connectMockWallet() {
       
       // Check if user has active subscription (await since it's async)
       const hasSubscription = await checkActiveSubscription();
-      console.log('Has subscription:', hasSubscription);
       
       if (hasSubscription) {
         // Move to home tab
@@ -947,15 +1246,11 @@ async function connectMockWallet() {
 
 // Check if user has active subscription
 async function checkActiveSubscription() {
-  console.log('🔍 Checking for active subscription...');
-  console.log('📍 Current wallet:', state.wallet);
   
   // First: Check on-chain subscription (most reliable)
   if (state.wallet && window.electron && window.electron.checkOnChainSubscription) {
     try {
-      console.log('🔗 Checking on-chain subscription...');
       const onChainResult = await window.electron.checkOnChainSubscription(state.wallet);
-      console.log('🔗 On-chain result:', onChainResult);
       
       if (onChainResult.success && onChainResult.hasSubscription && !onChainResult.expired) {
         state.subscription = {
@@ -967,7 +1262,6 @@ async function checkActiveSubscription() {
         };
         // Sync to localStorage
         localStorage.setItem('subscriptionData', JSON.stringify(state.subscription));
-        console.log('✅ Found active ON-CHAIN subscription:', onChainResult.plan);
         return true;
       }
     } catch (e) {
@@ -979,13 +1273,11 @@ async function checkActiveSubscription() {
   if (window.electron && window.electron.loadSubscription) {
     try {
       const result = await window.electron.loadSubscription(state.wallet);
-      console.log('📂 Load subscription result:', result);
       
       if (result.success && result.subscription) {
         state.subscription = result.subscription;
         // Also sync to localStorage
         localStorage.setItem('subscriptionData', JSON.stringify(result.subscription));
-        console.log('✅ Found active subscription from file:', result.subscription.plan);
         return true;
       }
     } catch (e) {
@@ -995,13 +1287,11 @@ async function checkActiveSubscription() {
   
   // Fallback: Check cached subscription from localStorage
   const subscriptionData = localStorage.getItem('subscriptionData');
-  console.log('📦 localStorage subscriptionData:', subscriptionData ? 'found' : 'not found');
   
   if (subscriptionData) {
     try {
       const sub = JSON.parse(subscriptionData);
       const now = Date.now();
-      console.log('📋 Subscription details:', {
         plan: sub.plan,
         expiresAt: new Date(sub.expiresAt).toISOString(),
         walletAddress: sub.walletAddress,
@@ -1015,14 +1305,11 @@ async function checkActiveSubscription() {
         // Also verify wallet matches (if set)
         if (!state.wallet || sub.walletAddress === state.wallet) {
           state.subscription = sub;
-          console.log('✅ Found active subscription:', sub.plan, 'expires:', new Date(sub.expiresAt));
           return true;
         } else {
-          console.log('⚠️ Subscription is for different wallet');
         }
       } else {
         // Subscription expired, clear it
-        console.log('⏰ Subscription expired, clearing...');
         localStorage.removeItem('subscriptionData');
         if (window.electron && window.electron.clearSubscription) {
           await window.electron.clearSubscription();
@@ -1035,7 +1322,6 @@ async function checkActiveSubscription() {
   }
   
   // No valid local subscription found
-  console.log('❌ No valid subscription found');
   return false;
 }
 
@@ -1110,10 +1396,10 @@ function setupSubscriptionCodeHandler() {
 function validateSubscriptionCode(code) {
   // Demo valid codes - in production, validate against server/blockchain
   const validCodes = {
-    'DVPN-MONTH-FREE': { plan: 'Monthly', duration: 30 * 24 * 60 * 60 * 1000 },
-    'DVPN-YEAR-FREE': { plan: 'Yearly', duration: 365 * 24 * 60 * 60 * 1000 },
-    'DVPN-TRIAL-7DAY': { plan: 'Trial', duration: 7 * 24 * 60 * 60 * 1000 },
-    'DVPN-2024-PROMO': { plan: 'Monthly', duration: 30 * 24 * 60 * 60 * 1000 },
+    'GVPN-MONTH-FREE': { plan: 'Monthly', duration: 30 * 24 * 60 * 60 * 1000 },
+    'GVPN-YEAR-FREE': { plan: 'Yearly', duration: 365 * 24 * 60 * 60 * 1000 },
+    'GVPN-TRIAL-7DAY': { plan: 'Trial', duration: 7 * 24 * 60 * 60 * 1000 },
+    'GVPN-2024-PROMO': { plan: 'Monthly', duration: 30 * 24 * 60 * 60 * 1000 },
   };
   
   return validCodes[code] || null;
@@ -1154,7 +1440,6 @@ window.subscribePlan = async function(planType, priceSOL) {
       
     } else {
       // For mock wallet, simulate the transaction
-      console.log('Mock wallet: Simulating subscription transaction...');
       showToast('🔄 Processing mock subscription...', 'info');
       
       // Simulate network delay
@@ -1162,7 +1447,6 @@ window.subscribePlan = async function(planType, priceSOL) {
       signature = 'mock_sub_' + Date.now();
     }
     
-    console.log('✅ Subscription signature:', signature);
     
     // Calculate expiry based on plan
     const duration = plan.durationDays * 24 * 60 * 60 * 1000;
@@ -1179,7 +1463,6 @@ window.subscribePlan = async function(planType, priceSOL) {
       onChain: !signature.startsWith('mock_')
     };
     
-    console.log('💾 Saving subscription...');
     
     // Save to localStorage
     localStorage.setItem('subscriptionData', JSON.stringify(subscription));
@@ -1187,12 +1470,10 @@ window.subscribePlan = async function(planType, priceSOL) {
     // ALSO save to main process file storage (persistent)
     if (window.electron && window.electron.saveSubscription) {
       const saveResult = await window.electron.saveSubscription(subscription);
-      console.log('💾 Saved to file:', saveResult.success ? 'YES' : 'NO');
     }
     
     // Verify it was saved
     const savedData = localStorage.getItem('subscriptionData');
-    console.log('✅ Verified subscription saved to localStorage:', savedData ? 'YES' : 'NO');
     
     state.subscription = subscription;
     
@@ -1320,7 +1601,6 @@ function switchToTab(tabId) {
 function setupNavigationTabs() {
   const navItems = document.querySelectorAll('.nav-item');
   
-  console.log('🔧 Setting up navigation tabs, found:', navItems.length, 'items');
   
   if (navItems.length === 0) {
     console.error('❌ No nav items found! Sidebar might not be in DOM yet');
@@ -1329,13 +1609,11 @@ function setupNavigationTabs() {
   
   navItems.forEach((item, index) => {
     const tabName = item.getAttribute('data-tab');
-    console.log(`  [${index}] Nav item: ${tabName}`);
     
     item.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       
-      console.log('🖱️ Tab clicked:', tabName);
       
       // Update active nav item
       navItems.forEach(nav => nav.classList.remove('active'));
@@ -1348,7 +1626,6 @@ function setupNavigationTabs() {
       const targetTab = document.getElementById(`${tabName}Tab`);
       if (targetTab) {
         targetTab.classList.add('active');
-        console.log('✅ Tab switched to:', tabName);
         
         // Show sidebar for main tabs
         const sidebar = document.querySelector('.sidebar');
@@ -1370,7 +1647,6 @@ function setupNavigationTabs() {
     });
   });
   
-  console.log('✅ Navigation tabs setup complete');
 }
 
 // Wallet Connection
@@ -1482,7 +1758,6 @@ async function loadNodesFromIndexer() {
     
     // IPFS as PRIMARY source
     if (latestCID) {
-      console.log('📡 Fetching nodes from IPFS Pinata:', latestCID);
       
       // Try multiple gateways
       const gateways = CONFIG.ipfsGateways || [CONFIG.pinataGateway];
@@ -1491,7 +1766,6 @@ async function loadNodesFromIndexer() {
       for (const gateway of gateways) {
         try {
           const ipfsUrl = `${gateway}${latestCID}`;
-          console.log(`🌐 Trying gateway: ${gateway}`);
           
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -1501,16 +1775,13 @@ async function loadNodesFromIndexer() {
           
           if (ipfsResponse.ok) {
             ipfsData = await ipfsResponse.json();
-            console.log(`✅ Fetched from ${gateway}`);
             break;
           }
         } catch (gatewayError) {
-          console.log(`❌ Gateway ${gateway} failed:`, gatewayError.message);
         }
       }
       
       if (ipfsData && ipfsData.nodes && ipfsData.nodes.length > 0) {
-        console.log('✅ IPFS data:', ipfsData);
         
         // Convert IPFS node format to app format
         state.nodes = ipfsData.nodes.map((node, index) => ({
@@ -1540,7 +1811,6 @@ async function loadNodesFromIndexer() {
     // Fallback: Try local indexer API (for development)
     if (!CONFIG.useIPFSPrimary) {
       try {
-        console.log('📡 Trying local indexer API...');
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 3000);
         
@@ -1561,7 +1831,6 @@ async function loadNodesFromIndexer() {
           }
         }
       } catch (indexerError) {
-        console.log('❌ Indexer not available');
       }
     }
     
@@ -1683,7 +1952,7 @@ function extractCityName(location) {
   
   // Handle different formats
   if (location.includes(':')) {
-    // IP:port format
+    // IP:port format - return the IP as-is, don't try to convert
     const parts = location.split(':');
     return parts[0];
   }
@@ -1693,19 +1962,20 @@ function extractCityName(location) {
     return location.split(',')[0].trim();
   }
   
-  // Check for known city names
+  // Check for exact known abbreviations only (case-insensitive, word boundary match)
   const cityMap = {
     'nyc': 'New York',
-    'local': 'Local',
-    'sf': 'San Francisco',
-    'la': 'Los Angeles'
+    'sf': 'San Francisco'
   };
   
-  const normalized = location.toLowerCase();
-  for (const [key, value] of Object.entries(cityMap)) {
-    if (normalized.includes(key)) return value;
+  const normalized = location.toLowerCase().trim();
+  
+  // Only match if the entire location matches the abbreviation
+  if (cityMap[normalized]) {
+    return cityMap[normalized];
   }
   
+  // Return the original location as-is
   return location;
 }
 
@@ -1785,7 +2055,6 @@ async function connect() {
       
       // Step 1: Get config directly from server's ncat (port 22222)
       const [serverIp, serverPort] = state.selectedNode.endpoint.split(':');
-      console.log(`🔌 Connecting to ncat at ${serverIp}:22222 to get WireGuard config...`);
       
       const configResult = await window.electron.requestWgConfig(serverIp, 22222);
       
@@ -1794,8 +2063,6 @@ async function connect() {
         throw new Error('Failed to connect to VPN server: ' + configResult.error);
       }
       
-      console.log('✅ Received config from server ncat');
-      console.log('📝 Raw config:', configResult.config);
       
       // The server's wgip.sh returns a complete WireGuard config
       // We just need to use it directly!
@@ -1825,7 +2092,6 @@ async function connect() {
         try {
           const session = await createLocalSession(state.selectedNode, state.wallet);
           state.currentSessionId = session.id;
-          console.log('✅ Session created on IPFS:', state.currentSessionId);
         } catch (e) {
           console.warn('Failed to create IPFS session:', e.message);
         }
@@ -1846,15 +2112,12 @@ async function connect() {
       statusText.textContent = 'Connected (Mock)';
       // Extract IP from endpoint (remove port)
       const nodeIp = state.selectedNode.endpoint.split(':')[0];
-      console.log('🔍 Selected node endpoint:', state.selectedNode.endpoint);
-      console.log('🔍 Extracted IP:', nodeIp);
       document.getElementById('statusIp').textContent = nodeIp;
       
       // Create session on IPFS (no API needed)
       try {
         const session = await createLocalSession(state.selectedNode, state.wallet);
         state.currentSessionId = session.id;
-        console.log('✅ Session created on IPFS (mock):', state.currentSessionId);
       } catch (e) {
         console.warn('Failed to create IPFS session:', e.message);
       }
@@ -1877,7 +2140,6 @@ async function disconnect() {
   const statusCircle = document.getElementById('statusCircle');
   const statusText = document.getElementById('statusText');
   const disconnectedNode = state.selectedNode; // Save for rating
-  console.log('🔌 Disconnect called, selectedNode:', state.selectedNode);
   
   try {
     statusText.textContent = 'Disconnecting...';
@@ -1886,12 +2148,10 @@ async function disconnect() {
     try {
       if (state.currentSessionId) {
         await endLocalSession(state.currentSessionId);
-        console.log('✅ Session ended on IPFS:', state.currentSessionId);
         state.currentSessionId = null;
       } else if (state.wallet) {
         // Fallback: end by wallet
         await endLocalSessionsByWallet(state.wallet);
-        console.log('✅ Sessions ended on IPFS by wallet');
       }
     } catch (e) {
       console.warn('Failed to end IPFS session:', e.message);
@@ -1961,13 +2221,11 @@ async function disconnect() {
 
 // Show rating modal after disconnect
 function showRatingModal(node) {
-  console.log('🌟 showRatingModal called with node:', node);
   if (!node) {
     console.warn('⚠️ No node provided to showRatingModal');
     return;
   }
   const nodeName = extractCityName(node.location || node.endpoint || 'VPN Node');
-  console.log('🌟 Creating rating modal for:', nodeName);
   
   // Create modal overlay
   const overlay = document.createElement('div');
@@ -2028,7 +2286,6 @@ async function submitNodeRating(node, rating) {
     const result = await rateNodeLocally(node.pubkey || node.endpoint, rating, state.wallet);
     
     if (result.success) {
-      console.log(`✅ Node rated: ${rating} stars (new avg: ${result.new_rating})`);
     } else {
       console.warn('Failed to rate node:', result.error);
     }
@@ -2127,7 +2384,6 @@ async function updateConnectedIP() {
   if (statusIpEl && state.selectedNode) {
     const nodeIp = state.selectedNode.endpoint.split(':')[0];
     statusIpEl.textContent = nodeIp;
-    console.log('🔄 Updated IP display to:', nodeIp);
   }
 }
 
@@ -2344,7 +2600,6 @@ function getFlagForLocation(location) {
 
 function updateConnectionLine(location) {
   // This would update the connection line on the map
-  console.log('Updating connection line for:', location);
 }
 
 function drawWorldMap() {
@@ -2410,7 +2665,22 @@ function setupProviderDashboard() {
   }
   
   if (refreshProviderBtn) {
-    refreshProviderBtn.addEventListener('click', loadProviderStats);
+    refreshProviderBtn.addEventListener('click', async () => {
+      // Force clear ALL caches to get fresh data from Pinata
+      ipfsSessionsCache = [];
+      ipfsEarningsCache = {};
+      allMergedSessionsCache = []; // Clear merged sessions cache
+      lastAllSessionsFetch = 0;    // Reset merged sessions timestamp
+      lastIPFSFetch.sessions = 0;
+      lastIPFSFetch.earnings = 0;
+      lastIPFSFetch.registry = 0;
+      IPFS_DATA_CIDS.sessions = null;
+      IPFS_DATA_CIDS.earnings = null;
+      
+      showToast('🔄 Refreshing ALL historical data from IPFS...', 'info');
+      await loadProviderStats();
+      showToast('✅ Stats refreshed with ALL historical sessions!', 'success');
+    });
   }
   
   if (claimEarningsBtn) {
@@ -2439,11 +2709,18 @@ async function handleClaimEarnings() {
       claimBtn.textContent = 'Processing...';
     }
     
-    // Get earnings from IPFS
+    // Get earnings from on-chain escrow (subscription-based rewards)
     const earningsData = await getProviderEarnings(state.wallet);
     
+    
+    // Check if there's escrow balance to claim
+    if (earningsData.available_balance <= 0) {
+      showToast(earningsData.message || 'No escrow balance to claim. Users must subscribe first.', 'warning');
+      return;
+    }
+    
     // Get sessions to find subscription wallets to claim from
-    const allSessions = await getLocalSessions();
+    const allSessions = await fetchAllMergedSessions();
     
     // Find unique user wallets who used the service (potential subscriptions to claim)
     const userWallets = new Set();
@@ -2451,18 +2728,44 @@ async function handleClaimEarnings() {
       .filter(s => !s.is_active && s.node_provider === state.wallet)
       .forEach(s => userWallets.add(s.user_wallet));
     
-    console.log('📊 Found', userWallets.size, 'user wallets with ended sessions');
+    
+    // Show confirmation with escrow-based info
+    const availableSol = earningsData.available_balance_sol;
+    const totalEscrowSol = earningsData.total_escrow_sol || '0';
+    const networkEscrowSol = earningsData.network_total_escrow_sol || 0;
+    const otherProvidersEscrowSol = earningsData.other_providers_escrow_sol || 0;
+    const myNodeCount = earningsData.my_node_count || 0;
+    
+    const confirmed = confirm(
+      `💰 MY NODE ESCROW CLAIM\n\n` +
+      `🖥️ My Nodes: ${myNodeCount}\n\n` +
+      `═══ MY ESCROW (NODES I OWN) ═══\n` +
+      `Total Escrow Balance: ${totalEscrowSol} SOL\n` +
+      `My Provider Share (80%): ${earningsData.total_earned_sol} SOL\n` +
+      `Treasury Share (20%): ${(parseFloat(totalEscrowSol) * 0.2).toFixed(4)} SOL\n\n` +
+      `Available to Claim: ${availableSol} SOL\n` +
+      `Already Withdrawn: ${earningsData.withdrawn_sol} SOL\n\n` +
+      `═══ NETWORK STATS ═══\n` +
+      `Network Total Escrow: ${networkEscrowSol.toFixed(4)} SOL\n` +
+      `Other Providers Escrow: ${otherProvidersEscrowSol.toFixed(4)} SOL\n\n` +
+      `📊 From ${earningsData.escrow_accounts || 0} escrow accounts\n` +
+      `📊 ${userWallets.size} user subscription(s)\n\n` +
+      `Proceed with on-chain claim?`
+    );
+    
+    if (!confirmed) {
+      return;
+    }
     
     // Try to claim from on-chain subscriptions
     let totalClaimed = 0;
     let successfulClaims = [];
     
     if (window.electron && window.electron.claimSubscriptionOnchain && userWallets.size > 0) {
-      showToast(`🔄 Checking ${userWallets.size} subscription(s) on-chain...`, 'info');
+      showToast(`🔄 Claiming from ${userWallets.size} subscription(s) on-chain...`, 'info');
       
       for (const userWallet of userWallets) {
         try {
-          console.log('💰 Attempting to claim subscription from:', userWallet);
           const result = await window.electron.claimSubscriptionOnchain(userWallet);
           
           if (result.success) {
@@ -2472,43 +2775,28 @@ async function handleClaimEarnings() {
               amount: result.providerShare,
               signature: result.signature
             });
-            console.log('✅ Claimed', result.providerShare, 'SOL from', userWallet);
           } else {
-            console.log('⚠️ Could not claim from', userWallet, ':', result.error);
           }
         } catch (e) {
-          console.log('⚠️ Claim error for', userWallet, ':', e.message);
         }
       }
     }
     
     // Show results
     if (totalClaimed > 0) {
-      showToast(`🎉 Claimed ${totalClaimed.toFixed(6)} SOL on-chain! (80% of subscription escrow)`, 'success');
+      showToast(`🎉 Claimed ${totalClaimed.toFixed(6)} SOL from escrow! (80% provider / 20% treasury)`, 'success');
       
       // Record withdrawal on IPFS
       await recordWithdrawal(state.wallet, totalClaimed * 1e9);
       
-    } else if (earningsData.available_balance > 0) {
-      // Fallback to local tracking
-      const availableSol = earningsData.available_balance_sol;
+    } else if (successfulClaims.length === 0 && earningsData.available_balance > 0) {
+      // No on-chain claims worked, but escrow exists
+      showToast('⚠️ On-chain claim pending. Check your wallet for transaction.', 'info');
       
-      const confirmed = confirm(
-        `📋 No on-chain subscription escrow found to claim.\n\n` +
-        `Local tracking shows: ${availableSol} SOL available\n\n` +
-        `For REAL SOL withdrawals:\n` +
-        `• Users must pay for subscriptions on-chain via Phantom\n` +
-        `• Subscription SOL goes to escrow PDA\n` +
-        `• You claim 80% from escrow (20% to treasury)\n\n` +
-        `Mark ${availableSol} SOL as withdrawn (local only)?`
-      );
-      
-      if (confirmed) {
-        await recordWithdrawal(state.wallet, earningsData.available_balance);
-        showToast(`📋 Recorded: ${availableSol} SOL on IPFS`, 'info');
-      }
+      // Still record the withdrawal attempt
+      await recordWithdrawal(state.wallet, earningsData.available_balance);
     } else {
-      showToast('No earnings available to withdraw', 'warning');
+      showToast('No escrow funds were claimable at this time.', 'warning');
     }
     
     // Refresh stats
@@ -2560,11 +2848,12 @@ async function handleRegisterNode() {
   const registerBtn = document.getElementById('registerNodeBtn');
   if (registerBtn) {
     registerBtn.disabled = true;
-    registerBtn.innerHTML = '<span class="spinner"></span> Publishing to IPFS...';
+    registerBtn.innerHTML = '<span class="spinner"></span> Registering...';
   }
   
   try {
-    showToast('📤 Publishing node to Pinata IPFS...', 'info');
+    // STEP 1: Register on IPFS first
+    showToast('📤 Step 1/2: Publishing to IPFS...', 'info');
     
     const nodeData = {
       provider_wallet: state.wallet,
@@ -2574,138 +2863,113 @@ async function handleRegisterNode() {
       wireguard_pubkey: publicKey
     };
     
-    console.log('Publishing node to Pinata:', nodeData);
     
-    // 1. Publish directly to Pinata IPFS
     const ipfsResult = await publishNodeToPinata(nodeData);
     
-    if (ipfsResult.success) {
-      console.log('✅ Node published to IPFS:', ipfsResult.cid);
-      showToast(`✅ Node published to IPFS!`, 'success');
-      
-      // 2. Update the main registry on IPFS
-      try {
-        // Get current nodes from registry
-        const currentNodes = await getAllNodesFromIPFS();
-        
-        // Add the new node
-        const newNode = {
-          endpoint: finalEndpoint,
-          location: location,
-          region: location.toLowerCase().replace(/[^a-z]/g, '-'),
-          provider: state.wallet,
-          wg_server_pubkey: publicKey,
-          price_per_hour_lamports: parseInt(pricePerHour) * 1000000, // Convert to lamports
-          is_active: true,
-          bandwidth_mbps: 100,
-          rating_avg: '5.0',
-          ipfs_cid: ipfsResult.cid
-        };
-        
-        // Check if node already exists (update instead of add)
-        const existingIndex = currentNodes.findIndex(n => 
-          n.provider === state.wallet || n.endpoint === finalEndpoint
-        );
-        
-        if (existingIndex >= 0) {
-          currentNodes[existingIndex] = { ...currentNodes[existingIndex], ...newNode };
-          console.log('📝 Updating existing node in registry');
-        } else {
-          currentNodes.push(newNode);
-          console.log('📝 Adding new node to registry');
-        }
-        
-        // Publish updated registry
-        const registryResult = await publishRegistryToPinata(currentNodes);
-        
-        if (registryResult.success) {
-          console.log('✅ Registry updated on IPFS:', registryResult.cid);
-          showToast(`🎉 Node added to IPFS registry!`, 'success');
-          
-          // Update local config with new CID
-          CONFIG.ipfsRegistryCID = registryResult.cid;
-          
-          // Update local state
-          state.nodes = currentNodes.map((node, index) => ({
-            pubkey: node.endpoint,
-            provider: node.provider,
-            node_id: index + 1,
-            endpoint: node.endpoint,
-            location: node.location,
-            region: node.region,
-            price_per_minute_lamports: Math.floor((node.price_per_hour_lamports || 6000000) / 60),
-            wg_server_pubkey: node.wg_server_pubkey,
-            max_capacity: 100,
-            active_sessions: 0,
-            is_active: node.is_active !== false,
-            reputation_score: 1000,
-            bandwidth_mbps: node.bandwidth_mbps || 100,
-            rating_avg: node.rating_avg || '5.0',
-            source: 'ipfs-pinata'
-          }));
-        }
-      } catch (registryErr) {
-        console.warn('Registry update skipped:', registryErr.message);
-      }
-      
-      // 3. Also register with local indexer for immediate availability (optional)
-      if (!CONFIG.useIPFSPrimary) {
-        try {
-          const response = await fetch(`${CONFIG.indexerUrl}/nodes`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              provider_wallet: state.wallet,
-              location: location,
-              vpn_endpoint: finalEndpoint,
-              price_per_hour: parseInt(pricePerHour),
-              wireguard_pubkey: publicKey,
-              is_active: true,
-              ipfs_cid: ipfsResult.cid
-            })
-          });
-          
-          if (response.ok) {
-            console.log('✅ Node also registered with local indexer');
-          }
-        } catch (indexerErr) {
-          console.warn('Indexer registration skipped (IPFS still successful):', indexerErr.message);
-        }
-      }
-      
-      // Show success with IPFS details
-      showToast(`🎉 Node permanently stored on IPFS!`, 'success');
-      
-      // Show IPFS link
-      setTimeout(() => {
-        showToast(`📎 CID: ${ipfsResult.cid.substring(0, 15)}...`, 'info');
-      }, 1500);
-      
-      // Clear form inputs
-      document.getElementById('providerNodeLocation').value = '';
-      document.getElementById('providerNodeEndpoint').value = '';
-      document.getElementById('providerNodePrice').value = '';
-      document.getElementById('providerNodePubkey').value = '';
-      
-      // Wait a bit for the API to update
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Reload everything to show newly registered node
-      await populateLocations();
-      await displayProviderNodes();
-      await loadProviderStats();
-      
-      showToast('Your node is now visible in the VPN list!', 'success');
-      
-    } else {
-      showToast('❌ Failed to publish to IPFS: ' + ipfsResult.error, 'error');
+    if (!ipfsResult.success) {
+      throw new Error('IPFS registration failed: ' + ipfsResult.error);
     }
+    
+    showToast(`✅ IPFS: Published! CID: ${ipfsResult.cid.substring(0, 12)}...`, 'success');
+    
+    // Update the registry on IPFS
+    try {
+      const currentNodes = await getAllNodesFromIPFS();
+      
+      const newNode = {
+        endpoint: finalEndpoint,
+        location: location,
+        region: location.toLowerCase().replace(/[^a-z]/g, '-'),
+        provider: state.wallet,
+        wg_server_pubkey: publicKey,
+        price_per_hour_lamports: parseInt(pricePerHour) * 1000000,
+        is_active: true,
+        bandwidth_mbps: 100,
+        rating_avg: '5.0',
+        ipfs_cid: ipfsResult.cid,
+        registered_at: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      };
+      
+      const nodeUptimeKey = `gvpn_node_uptime_${state.wallet}`;
+      if (!localStorage.getItem(nodeUptimeKey)) {
+        localStorage.setItem(nodeUptimeKey, Date.now().toString());
+      }
+      
+      const existingIndex = currentNodes.findIndex(n => 
+        n.provider === state.wallet || n.endpoint === finalEndpoint
+      );
+      
+      if (existingIndex >= 0) {
+        const originalRegisteredAt = currentNodes[existingIndex].registered_at || currentNodes[existingIndex].created_at;
+        currentNodes[existingIndex] = { ...currentNodes[existingIndex], ...newNode };
+        if (originalRegisteredAt) {
+          currentNodes[existingIndex].registered_at = originalRegisteredAt;
+        }
+      } else {
+        currentNodes.push(newNode);
+      }
+      
+      const registryResult = await publishRegistryToPinata(currentNodes);
+      if (registryResult.success) {
+        CONFIG.ipfsRegistryCID = registryResult.cid;
+      }
+    } catch (registryErr) {
+      console.warn('Registry update skipped:', registryErr.message);
+    }
+    
+    // STEP 2: Register on-chain via Phantom
+    showToast('🔗 Step 2/2: Opening Phantom for on-chain registration...', 'info');
+    
+    if (registerBtn) {
+      registerBtn.innerHTML = '<span class="spinner"></span> Sign in Phantom...';
+    }
+    
+    // Use Phantom to sign the transaction
+    let onchainResult = await window.electron.registerNodePhantom({
+      walletAddress: state.wallet,
+      endpoint: finalEndpoint,
+      location: location,
+      region: location.toLowerCase().replace(/[^a-z0-9-]/g, '-').substring(0, 12),
+      pricePerHour: parseFloat(pricePerHour) / 1000000, // Convert to SOL
+      wgPublicKey: publicKey
+    });
+    
+    if (onchainResult.success) {
+      showToast(`✅ On-chain: Registered! TX: ${onchainResult.signature?.substring(0, 12)}...`, 'success');
+      
+      // Show full success message
+      setTimeout(() => {
+        showToast('🎉 Node registered on IPFS + Solana! You can now claim rewards.', 'success');
+      }, 1500);
+    } else {
+      console.error('❌ On-chain registration failed:', onchainResult.error);
+      showToast(`⚠️ On-chain failed: ${onchainResult.error}. Node is on IPFS only.`, 'warning');
+      
+      // Show help for common errors
+      if (onchainResult.error?.includes('Insufficient SOL')) {
+        showToast('💰 Add SOL to your wallet to register on-chain.', 'info');
+      } else if (onchainResult.error?.includes('Provider not registered')) {
+        showToast('📝 You need to register as a provider first.', 'info');
+      }
+    }
+    
+    // Clear form inputs
+    document.getElementById('providerNodeLocation').value = '';
+    document.getElementById('providerNodeEndpoint').value = '';
+    document.getElementById('providerNodePrice').value = '';
+    document.getElementById('providerNodePubkey').value = '';
+    
+    // Reload stats
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    await populateLocations();
+    await displayProviderNodes();
+    await loadProviderStats();
     
   } catch (error) {
     console.error('Node registration error:', error);
     showToast('Error registering node: ' + error.message, 'error');
   } finally {
-    // Reset button
     if (registerBtn) {
       registerBtn.disabled = false;
       registerBtn.innerHTML = `
@@ -2770,21 +3034,51 @@ async function loadProviderStats() {
     return;
   }
   
+  
   try {
-    // Load all nodes from IPFS first
-    let allNodes = await getAllNodesFromIPFS();
+    // Always fetch fresh nodes from Pinata for provider stats (bypass cache)
+    let allNodes = [];
     
-    // If no nodes from IPFS, try local API as fallback
-    if (allNodes.length === 0 && !CONFIG.useIPFSPrimary) {
-      try {
-        const allNodesResponse = await fetch(`${CONFIG.indexerUrl}/nodes`);
-        if (allNodesResponse.ok) {
-          const nodesData = await allNodesResponse.json();
-          allNodes = nodesData.nodes || nodesData;
+    // First try to get the latest registry CID from Pinata
+    const latestCID = await fetchLatestRegistryCID();
+    
+    if (latestCID) {
+      for (const gateway of CONFIG.ipfsGateways) {
+        try {
+          const ipfsUrl = `${gateway}${latestCID}`;
+          
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000);
+          
+          const response = await fetch(ipfsUrl, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.nodes && data.nodes.length > 0) {
+              allNodes = data.nodes.map((node, index) => ({
+                pubkey: node.endpoint,
+                provider: node.provider,
+                node_id: index + 1,
+                endpoint: node.endpoint,
+                location: node.location,
+                region: node.region,
+                price_per_minute_lamports: Math.floor((node.price_per_hour_lamports || 6000000) / 60),
+                wg_server_pubkey: node.wg_server_pubkey,
+                is_active: node.is_active !== false,
+                source: 'ipfs-pinata-fresh'
+              }));
+              break;
+            }
+          }
+        } catch (error) {
         }
-      } catch (e) {
-        console.log('Local API unavailable');
       }
+    }
+    
+    // Fallback to cached nodes
+    if (allNodes.length === 0) {
+      allNodes = await getAllNodesFromIPFS();
     }
     
     const myNodes = allNodes.filter(node => node.provider === state.wallet);
@@ -2793,8 +3087,89 @@ async function loadProviderStats() {
     const nodeStatusCard = document.getElementById('nodeStatusCard');
     const nodeOnlineStatus = document.getElementById('nodeOnlineStatus');
     
+    // ALWAYS load session stats and earnings (don't depend on myNodes check)
+    const allSessions = await getLocalSessions();
+    
+    // Get my node endpoints for session matching
+    const myNodeEndpoints = myNodes.map(n => n.endpoint);
+    
+    // Filter sessions for my nodes - check multiple fields
+    const mySessions = allSessions.filter(s => 
+      s.node_provider === state.wallet || 
+      s.provider === state.wallet ||
+      myNodeEndpoints.includes(s.node_endpoint)
+    );
+    
+    
+    // Active users = currently active sessions on my nodes
+    const activeUsersSessions = mySessions.filter(s => s.is_active === true);
+    
+    const activeUsersEl = document.getElementById('providerActiveUsers');
+    if (activeUsersEl) activeUsersEl.textContent = activeUsersSessions.length;
+    
+    // Total sessions
+    const totalSessionsEl = document.getElementById('providerSessions');
+    if (totalSessionsEl) totalSessionsEl.textContent = mySessions.length;
+    
+    // Get earnings (from on-chain escrow - subscription-based rewards)
+    const earningsData = await getProviderEarnings(state.wallet);
+    
+    const earningsEl = document.getElementById('providerEarnings');
+    const claimBtn = document.getElementById('claimEarningsBtn');
+    
+    // Show available balance (provider's usage-based share)
+    const availableBalance = earningsData.available_balance || 0;
+    if (earningsEl) {
+      if (earningsData.source === 'onchain-escrow') {
+        earningsEl.textContent = `${(availableBalance / 1e9).toFixed(4)} SOL`;
+        // Show session-based info in tooltip
+        const sessionInfo = earningsData.mySessions !== undefined 
+          ? `My Sessions: ${earningsData.mySessions}/${earningsData.totalNetworkSessions || 0} | ${earningsData.shareReason || ''}`
+          : `My Share: ${earningsData.total_earned_sol} SOL`;
+        earningsEl.title = `${sessionInfo}\nNetwork Escrow: ${earningsData.total_escrow_sol} SOL`;
+      } else if (earningsData.source === 'no-onchain-node') {
+        // Show 0 if no on-chain node
+        earningsEl.textContent = `0.0000 SOL`;
+        earningsEl.title = '⚠️ Cannot claim: Your node is only in IPFS, not registered on Solana blockchain. Register on-chain to claim.';
+        earningsEl.style.color = '#FFB347'; // Orange to indicate warning
+      } else {
+        earningsEl.textContent = `0.0000 SOL`;
+        earningsEl.title = 'No subscription payments in escrow yet';
+      }
+    }
+    
+    // Update node count display with session info
+    const nodeCountEl = document.getElementById('providerNodeCount');
+    if (nodeCountEl) {
+      const myNodeCount = earningsData.my_node_count || myNodes.length;
+      if (earningsData.source === 'no-onchain-node') {
+        nodeCountEl.textContent = `⚠️ IPFS only - need on-chain node`;
+        nodeCountEl.style.color = '#FFB347';
+      } else if (earningsData.mySessions !== undefined) {
+        // Show session-based info
+        nodeCountEl.textContent = `${earningsData.mySessions || 0} sessions | ${myNodeCount} node${myNodeCount !== 1 ? 's' : ''}`;
+        nodeCountEl.style.color = '#888';
+      } else {
+        nodeCountEl.textContent = `${myNodeCount} node${myNodeCount !== 1 ? 's' : ''} | ${earningsData.escrow_accounts || 0} escrow acc`;
+        nodeCountEl.style.color = '#888';
+      }
+    }
+    
+    // Update button state
+    if (claimBtn) {
+      if (availableBalance <= 0) {
+        claimBtn.disabled = true;
+        claimBtn.title = earningsData.message || 'No escrow balance to claim. Users must subscribe first.';
+      } else {
+        claimBtn.disabled = false;
+        claimBtn.title = `Claim ${earningsData.available_balance_sol} SOL (80% of subscription escrow)`;
+      }
+    }
+
+    // Update node status
     if (myNodes.length > 0) {
       const activeNodes = myNodes.filter(n => n.is_active);
+      
       if (nodeStatusCard) {
         nodeStatusCard.style.background = activeNodes.length > 0 
           ? 'linear-gradient(135deg, #1A4D2E 0%, #2D5F3D 100%)'
@@ -2805,86 +3180,52 @@ async function loadProviderStats() {
         nodeOnlineStatus.style.color = activeNodes.length > 0 ? '#00D4AA' : '#FF6B6B';
       }
       
-      // Get session stats from IPFS
-      const allSessions = await getLocalSessions();
-      
-      // Filter sessions for my nodes
-      const mySessions = allSessions.filter(s => s.node_provider === state.wallet);
-      
-      // Active users = currently active sessions on my nodes
-      const activeUsersSessions = mySessions.filter(s => s.is_active === true);
-      const activeUsersEl = document.getElementById('providerActiveUsers');
-      if (activeUsersEl) activeUsersEl.textContent = activeUsersSessions.length;
-      
-      // Total sessions = all sessions (ended + active) on my nodes
-      const totalSessionsEl = document.getElementById('providerSessions');
-      if (totalSessionsEl) totalSessionsEl.textContent = mySessions.length;
-      
-      // Calculate total uptime from sessions
-      let totalUptimeSeconds = 0;
-      mySessions.forEach(s => {
-        if (s.end_time && s.start_time) {
-          const start = new Date(s.start_time);
-          const end = new Date(s.end_time);
-          totalUptimeSeconds += (end - start) / 1000;
-        } else if (s.is_active && s.start_time) {
-          // Active session - count from start to now
-          const start = new Date(s.start_time);
-          totalUptimeSeconds += (Date.now() - start) / 1000;
-        }
-      });
-      
+      // Calculate NODE uptime
+      let nodeUptimeSeconds = 0;
       const uptimeEl = document.getElementById('providerUptime');
+      
+      const activeNodesWithTime = activeNodes.filter(n => n.registered_at || n.created_at || n.is_active);
+      
+      if (activeNodesWithTime.length > 0) {
+        const nodeUptimeKey = `gvpn_node_uptime_${state.wallet}`;
+        let uptimeStart = localStorage.getItem(nodeUptimeKey);
+        
+        if (!uptimeStart) {
+          uptimeStart = Date.now().toString();
+          localStorage.setItem(nodeUptimeKey, uptimeStart);
+        }
+        
+        const oldestNodeTime = activeNodesWithTime.reduce((oldest, n) => {
+          const nodeTime = new Date(n.registered_at || n.created_at || uptimeStart).getTime();
+          return nodeTime < oldest ? nodeTime : oldest;
+        }, parseInt(uptimeStart));
+        
+        nodeUptimeSeconds = (Date.now() - oldestNodeTime) / 1000;
+      }
+      
       if (uptimeEl) {
-        if (totalUptimeSeconds > 0) {
-          // Show hours if significant, otherwise show minutes
-          const hours = totalUptimeSeconds / 3600;
-          if (hours >= 1) {
-            uptimeEl.textContent = `${hours.toFixed(1)}h`;
+        if (nodeUptimeSeconds > 0 && activeNodes.length > 0) {
+          const days = Math.floor(nodeUptimeSeconds / 86400);
+          const hours = Math.floor((nodeUptimeSeconds % 86400) / 3600);
+          const minutes = Math.floor((nodeUptimeSeconds % 3600) / 60);
+          
+          if (days >= 1) {
+            uptimeEl.textContent = `${days}d ${hours}h`;
+          } else if (hours >= 1) {
+            uptimeEl.textContent = `${hours}h ${minutes}m`;
           } else {
-            // Less than an hour - show minutes
-            const minutes = totalUptimeSeconds / 60;
-            uptimeEl.textContent = `${minutes.toFixed(0)}m`;
+            uptimeEl.textContent = `${Math.max(1, minutes)}m`;
           }
         } else {
           uptimeEl.textContent = '0m';
         }
       }
-      
-      // Get earnings from IPFS
-      const earningsData = await getProviderEarnings(state.wallet);
-      
-      const earningsEl = document.getElementById('providerEarnings');
-      const claimBtn = document.getElementById('claimEarningsBtn');
-      
-      // Show available balance (what can be withdrawn)
-      const availableBalance = earningsData.available_balance || 0;
-      if (earningsEl) {
-        earningsEl.textContent = `${(availableBalance / 1e9).toFixed(4)} SOL`;
-      }
-      
-      // Update button state
-      if (claimBtn) {
-        if (availableBalance <= 0) {
-          claimBtn.disabled = true;
-          claimBtn.title = 'No earnings to withdraw';
-        } else {
-          claimBtn.disabled = false;
-          claimBtn.title = `Withdraw ${earningsData.available_balance_sol} SOL`;
-        }
-      }
     } else {
+      // No nodes found, but still show earnings if we have sessions
       if (nodeOnlineStatus) {
-        nodeOnlineStatus.textContent = 'No Node';
-        nodeOnlineStatus.style.color = '#888';
+        nodeOnlineStatus.textContent = mySessions.length > 0 ? 'Sessions Found' : 'No Node';
+        nodeOnlineStatus.style.color = mySessions.length > 0 ? '#FFD700' : '#888';
       }
-      // Reset displays when no nodes
-      const earningsEl = document.getElementById('providerEarnings');
-      if (earningsEl) earningsEl.textContent = '0 SOL';
-      const activeUsersEl = document.getElementById('providerActiveUsers');
-      if (activeUsersEl) activeUsersEl.textContent = '0';
-      const totalSessionsEl = document.getElementById('providerSessions');
-      if (totalSessionsEl) totalSessionsEl.textContent = '0';
       const uptimeEl = document.getElementById('providerUptime');
       if (uptimeEl) uptimeEl.textContent = '0m';
     }
@@ -2906,7 +3247,6 @@ async function displayProviderNodes() {
   }
   
   if (!state.wallet) {
-    console.log('⚠️ No wallet connected, cannot display nodes');
     nodesList.innerHTML = `
       <div class="empty-state">
         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#4A4A4A" stroke-width="1.5">
@@ -2923,7 +3263,6 @@ async function displayProviderNodes() {
   }
   
   try {
-    console.log('🔍 Loading nodes for wallet:', state.wallet);
     
     // Primary: Fetch from IPFS
     let myNodes = [];
@@ -2931,7 +3270,6 @@ async function displayProviderNodes() {
     
     if (allNodes.length > 0) {
       myNodes = allNodes.filter(node => node.provider === state.wallet);
-      console.log('📦 IPFS nodes for wallet:', myNodes.length);
     }
     
     // Fallback: Fetch from local API if IPFS didn't work
@@ -2942,7 +3280,6 @@ async function displayProviderNodes() {
           const data = await response.json();
           const apiNodes = data.nodes || data;
           myNodes = apiNodes.filter(node => node.provider === state.wallet);
-          console.log('📦 Local API nodes:', myNodes.length);
         }
       } catch (e) {
         console.warn('Local API unavailable:', e.message);
@@ -2953,7 +3290,6 @@ async function displayProviderNodes() {
     try {
       const ipfsResult = await listPinnedNodes();
       if (ipfsResult.success && ipfsResult.nodes.length > 0) {
-        console.log('📦 IPFS pinned nodes:', ipfsResult.nodes.length);
         
         // Fetch details for nodes belonging to this wallet
         for (const pin of ipfsResult.nodes) {
@@ -2978,7 +3314,36 @@ async function displayProviderNodes() {
       console.warn('IPFS fetch skipped:', ipfsErr.message);
     }
     
-    console.log('✅ Total my nodes:', myNodes.length);
+    // Deduplicate nodes by endpoint (keep the one with higher price/more info)
+    const nodesByEndpoint = new Map();
+    for (const node of myNodes) {
+      const existing = nodesByEndpoint.get(node.endpoint);
+      if (!existing) {
+        nodesByEndpoint.set(node.endpoint, node);
+      } else {
+        // Keep the one with higher price or more recent data
+        const existingPrice = existing.price_per_hour_lamports || existing.price_per_hour || 0;
+        const newPrice = node.price_per_hour_lamports || node.price_per_hour || 0;
+        if (newPrice > existingPrice) {
+          nodesByEndpoint.set(node.endpoint, node);
+        }
+      }
+    }
+    myNodes = Array.from(nodesByEndpoint.values());
+    
+    
+    // Check on-chain status
+    let hasOnchainNode = false;
+    let onchainNodeCount = 0;
+    try {
+      const escrowData = await window.electron.getProviderEscrowBalance(state.wallet);
+      if (escrowData && escrowData.success) {
+        hasOnchainNode = escrowData.hasOnchainNode || false;
+        onchainNodeCount = escrowData.myNodeCount || 0;
+      }
+    } catch (e) {
+      console.warn('Could not check on-chain status:', e.message);
+    }
     
     if (myNodes.length === 0) {
       nodesList.innerHTML = `
@@ -2996,7 +3361,7 @@ async function displayProviderNodes() {
       return;
     }
     
-    // Display nodes
+    // Display nodes with on-chain status
     nodesList.innerHTML = myNodes.map(node => `
       <div class="node-card ${node.source === 'ipfs' ? 'ipfs-node' : ''}">
         <div class="node-card-header">
@@ -3018,18 +3383,34 @@ async function displayProviderNodes() {
             <span class="node-info-value">${node.active_sessions || 0}</span>
           </div>
           <div class="node-info-row">
-            <span class="node-info-label">Storage:</span>
-            <span class="node-info-value">${(node.source === 'ipfs-pinata' || node.ipfs_cid || CONFIG.useIPFSPrimary) ? '📦 IPFS' : '💾 Local'}</span>
+            <span class="node-info-label">IPFS Storage:</span>
+            <span class="node-info-value" style="color: #14F195;">✅ Registered</span>
           </div>
-          ${(node.source === 'ipfs-pinata' || CONFIG.useIPFSPrimary) ? `
           <div class="node-info-row">
-            <span class="node-info-label">Registry:</span>
-            <span class="node-info-value" style="font-size: 10px;">Pinata IPFS</span>
+            <span class="node-info-label">On-Chain:</span>
+            <span class="node-info-value" style="color: ${hasOnchainNode ? '#14F195' : '#FFB347'};">
+              ${hasOnchainNode ? '✅ Registered' : '⚠️ Not Registered'}
+            </span>
           </div>
-          ` : ''}
         </div>
+        ${!hasOnchainNode ? `
+        <div class="node-card-footer" style="margin-top: 10px;">
+          <button class="btn-small btn-warning register-onchain-btn" 
+            data-endpoint="${node.endpoint || ''}" 
+            data-location="${node.location || ''}" 
+            data-wgpubkey="${node.wg_server_pubkey || ''}" 
+            data-price="${node.price_per_hour_lamports || 0}"
+            style="width: 100%; background: linear-gradient(135deg, #FF9500, #FF6B00); border: none; padding: 8px 12px; border-radius: 6px; color: white; cursor: pointer; font-size: 12px;">
+            🔗 Register On-Chain (Required for Rewards)
+          </button>
+        </div>
+        ` : `
+        <div class="node-card-footer" style="margin-top: 10px;">
+          <span style="color: #14F195; font-size: 12px;">✅ Can claim subscription rewards</span>
+        </div>
+        `}
         ${(node.source === 'ipfs-pinata' || CONFIG.useIPFSPrimary) ? `
-        <div class="node-card-footer">
+        <div class="node-card-footer" style="margin-top: 5px;">
           <a href="https://w3s.link/ipfs/${CONFIG.ipfsRegistryCID}" target="_blank" class="ipfs-link">
             View Registry on IPFS →
           </a>
@@ -3037,6 +3418,19 @@ async function displayProviderNodes() {
         ` : ''}
       </div>
     `).join('');
+    
+    // Add click handlers for register on-chain buttons
+    nodesList.querySelectorAll('.register-onchain-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const endpoint = btn.dataset.endpoint;
+        const location = btn.dataset.location;
+        const wgPubkey = btn.dataset.wgpubkey;
+        const price = parseInt(btn.dataset.price) || 0;
+        
+        
+        await registerNodeOnChain(endpoint, location, wgPubkey, price);
+      });
+    });
     
   } catch (error) {
     console.error('Error displaying provider nodes:', error);
@@ -3052,4 +3446,3 @@ if (typeof initNodeProviderDashboard === 'function') {
   initNodeProviderDashboard();
 }
 
-console.log('DVPN Guard VPN App initialized');

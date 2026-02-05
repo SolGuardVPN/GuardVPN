@@ -75,17 +75,12 @@ const conn = provider.connection;
       const sim = await conn.simulateTransaction(signed, {sigVerify:false});
       const logs = sim.value && sim.value.logs ? sim.value.logs.join('\n') : '';
       if (sim.value && sim.value.err == null) {
-        console.log('SIM SUCCESS for pda', pda.toBase58(), 'seeds', s.map(x=> x.toString('hex').slice(0,16)));
-        console.log(logs);
         return;
       }
       if (logs && !logs.includes('ConstraintSeeds') && !logs.includes('writable privilege escalated')) {
-        console.log('SIM possibly different error for pda', pda.toBase58(), 'seeds', s.map(x=> x.toString('hex').slice(0,16)));
-        console.log(logs);
       }
     } catch(e) {
       // ignore
     }
   }
-  console.log('done searching');
 })();

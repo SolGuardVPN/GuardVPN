@@ -15,7 +15,6 @@ let providerKeypair;
 try {
   const secret = JSON.parse(fs.readFileSync(PROVIDER_KEYPAIR_PATH, 'utf8'));
   providerKeypair = Keypair.fromSecretKey(Buffer.from(secret));
-  console.log(`✅ Loaded provider keypair: ${providerKeypair.publicKey.toString()}`);
 } catch (e) {
   console.error('❌ Failed to load provider keypair:', e.message);
   process.exit(1);
@@ -39,7 +38,6 @@ function trackUsage(sessionPda, bytesTransferred) {
 // Submit usage receipt and claim chunk (called periodically)
 async function submitReceipt(sessionPda, bytesUsed) {
   try {
-    console.log(`📊 Submitting receipt for session ${sessionPda}: ${bytesUsed} bytes`);
     
     // Generate proof hash (in production: use merkle tree or hash-chain)
     const proofHash = crypto.createHash('sha256')
@@ -53,7 +51,6 @@ async function submitReceipt(sessionPda, bytesUsed) {
     const claimAmount = mbUsed * PRICE_PER_MB_LAMPORTS;
 
     if (claimAmount === 0) {
-      console.log('⏩ No charge for < 1 MB');
       return;
     }
 
@@ -76,7 +73,6 @@ async function submitReceipt(sessionPda, bytesUsed) {
       .signers([providerKeypair])
       .rpc();
 
-    console.log(`✅ Claimed ${claimAmount} lamports for ${bytesUsed} bytes`);
     
     // Update tracker
     usageTracker[sessionPda].lastClaim = Date.now();
@@ -108,14 +104,12 @@ async function receiptSubmitter() {
 // Claim final payout when session ends
 async function claimFinalPayout(sessionPda) {
   try {
-    console.log(`💰 Claiming final payout for session ${sessionPda}`);
     
     const session = await program.account.session.fetch(sessionPda);
     const now = Math.floor(Date.now() / 1000);
     
     // Check if session ended
     if (now < session.endTs.toNumber()) {
-      console.log('⏩ Session not ended yet');
       return;
     }
 
@@ -135,7 +129,6 @@ async function claimFinalPayout(sessionPda) {
       .signers([providerKeypair])
       .rpc();
 
-    console.log(`✅ Claimed final payout for session ${sessionPda}`);
     
     // Remove from tracker
     delete usageTracker[sessionPda];
@@ -174,7 +167,6 @@ async function payoutClaimer() {
 // Monitor WireGuard traffic and track usage (Linux only)
 async function monitorTraffic() {
   if (process.platform !== 'linux') {
-    console.log('⚠️  Traffic monitoring only works on Linux');
     return;
   }
   
@@ -187,7 +179,6 @@ async function monitorTraffic() {
   try {
     peers = JSON.parse(fs.readFileSync(PEERS_FILE, 'utf8') || '{}');
   } catch (e) {
-    console.log('⚠️  No peers.json found');
   }
   
   // Reverse map: clientWgPubkey -> sessionPda
@@ -216,12 +207,7 @@ async function monitorTraffic() {
 }
 
 // Start all background tasks
-console.log('🚀 Starting enhanced node daemon...');
 receiptSubmitter();
 payoutClaimer();
 monitorTraffic();
 
-console.log('✅ Node daemon running with:');
-console.log('   - Usage-based billing (receipts every 5 min)');
-console.log('   - Auto claim payouts (every 10 min)');
-console.log('   - Traffic monitoring (every 1 min)');

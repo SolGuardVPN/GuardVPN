@@ -16,12 +16,9 @@ async function main() {
   // Program ID
   const programId = new PublicKey("8LQKwvHJPdK6fKmopXmUwct8JjVGQhf3RFQd64nCV39i");
   
-  console.log("Program ID:", programId.toString());
-  console.log("Wallet:", wallet.publicKey.toString());
   
   // Check wallet balance
   const balance = await connection.getBalance(wallet.publicKey);
-  console.log("Wallet balance:", balance / 1e9, "SOL");
   
   // Compute provider PDA
   const [providerPda, providerBump] = await PublicKey.findProgramAddress(
@@ -29,16 +26,11 @@ async function main() {
     programId
   );
   
-  console.log("Provider PDA:", providerPda.toString());
   
   // Check if provider exists
   const providerAccount = await connection.getAccountInfo(providerPda);
   if (providerAccount) {
-    console.log("✅ Provider already exists!");
-    console.log("  - Owner:", providerAccount.owner.toString());
-    console.log("  - Data length:", providerAccount.data.length, "bytes");
   } else {
-    console.log("❌ Provider does not exist yet. Creating...");
     
     // Manual instruction for register_provider
     // Discriminator for register_provider
@@ -56,7 +48,6 @@ async function main() {
     
     const transaction = new anchor.web3.Transaction().add(instruction);
     const signature = await provider.sendAndConfirm(transaction);
-    console.log("✅ Provider registered! Signature:", signature);
   }
   
   // Compute node PDA (uses provider PDA as seed, not authority)
@@ -69,16 +60,11 @@ async function main() {
     programId
   );
   
-  console.log("\nNode PDA:", nodePda.toString());
   
   // Check if node exists
   const nodeAccount = await connection.getAccountInfo(nodePda);
   if (nodeAccount) {
-    console.log("✅ Node already exists!");
-    console.log("  - Owner:", nodeAccount.owner.toString());
-    console.log("  - Data length:", nodeAccount.data.length, "bytes");
   } else {
-    console.log("❌ Node does not exist yet. Creating...");
     
     // Manual instruction for register_node
     // Discriminator for register_node
@@ -140,16 +126,11 @@ async function main() {
     
     const transaction = new anchor.web3.Transaction().add(instruction);
     const signature = await provider.sendAndConfirm(transaction);
-    console.log("✅ Node registered! Signature:", signature);
   }
   
-  console.log("\n✅ Testing complete!");
-  console.log("Provider PDA:", providerPda.toString());
-  console.log("Node PDA:", nodePda.toString());
 }
 
 main().then(() => {
-  console.log("\n✅ Success!");
   process.exit(0);
 }).catch((err) => {
   console.error("❌ Error:", err);

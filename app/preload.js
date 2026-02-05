@@ -8,7 +8,6 @@ const mockWallet = {
   _listeners: {},
   
   connect: async () => {
-    console.log('[Mock Wallet] Connecting...');
     const walletAddress = '7WF4zwWvFVtg1WYcohirvb4CDTRtjFqjyF3ytSqJ7R8F';
     
     mockWallet.publicKey = {
@@ -19,12 +18,10 @@ const mockWallet = {
   },
   
   disconnect: async () => {
-    console.log('[Mock Wallet] Disconnecting...');
     mockWallet.publicKey = null;
   },
   
   signMessage: async (message) => {
-    console.log('[Mock Wallet] Signing message...');
     return new Uint8Array(64).fill(1); // Mock signature
   },
   
@@ -52,10 +49,6 @@ contextBridge.exposeInMainWorld('testKeypair', null);
 
 // Show a console message about wallet mode
 window.addEventListener('DOMContentLoaded', () => {
-  console.log('%c🔧 DVPN Development Mode', 'color: #9945FF; font-size: 16px; font-weight: bold;');
-  console.log('%cUsing mock Phantom wallet for Electron testing', 'color: #666; font-size: 12px;');
-  console.log('%cMock wallet address: 5wm7gTHTFEGsZm6oMgsk84tqh4twVYrVGCSkPKPv8Pyo', 'color: #666; font-size: 12px;');
-  console.log('%c💡 For real Phantom wallet, use a web browser version', 'color: #14F195; font-size: 12px;');
 });
 
 // Expose protected methods that allow the renderer process to use
@@ -140,6 +133,18 @@ contextBridge.exposeInMainWorld('electron', {
   registerNode: (nodeData) =>
     ipcRenderer.invoke('register-node', nodeData),
   
+  // Register node via Phantom wallet (opens browser for signing)
+  registerNodePhantom: (nodeData) =>
+    ipcRenderer.invoke('register-node-phantom', nodeData),
+  
+  // Submit signed transaction from Phantom
+  submitSignedTransaction: (signedTxBase64) =>
+    ipcRenderer.invoke('submit-signed-transaction', signedTxBase64),
+  
+  // Save wallet keypair for on-chain operations
+  saveWalletKeypair: (privateKey, walletAddress) =>
+    ipcRenderer.invoke('save-wallet-keypair', { privateKey, walletAddress }),
+  
   // Subscription operations
   createSubscription: (subscriptionData) =>
     ipcRenderer.invoke('create-subscription', subscriptionData),
@@ -174,6 +179,10 @@ contextBridge.exposeInMainWorld('electron', {
   // Get on-chain provider stats
   getOnchainProviderStats: (walletAddress) =>
     ipcRenderer.invoke('get-onchain-provider-stats', walletAddress),
+  
+  // Get all escrow balances for provider (subscription-based rewards)
+  getProviderEscrowBalance: (walletAddress) =>
+    ipcRenderer.invoke('get-provider-escrow-balance', walletAddress),
   
   // Claim subscription earnings (80% to provider, 20% to treasury)
   claimSubscriptionOnchain: (subscriptionUserWallet) =>

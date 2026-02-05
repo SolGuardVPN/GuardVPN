@@ -34,7 +34,6 @@ const PLANS = {
 };
 
 async function main() {
-  console.log('🔗 Connecting to Devnet...');
   const connection = new Connection(RPC_URL, 'confirmed');
 
   // Load or create wallet
@@ -55,29 +54,20 @@ async function main() {
     } else {
       throw new Error('Invalid wallet format');
     }
-    console.log('📝 Loaded wallet from:', walletPath);
-    console.log('   Address:', wallet.publicKey.toBase58());
   } else {
     wallet = Keypair.generate();
     fs.writeFileSync(testWalletPath, JSON.stringify(Array.from(wallet.secretKey)));
-    console.log('🆕 Created new wallet:', wallet.publicKey.toBase58());
   }
 
   // Check balance
   const balance = await connection.getBalance(wallet.publicKey);
-  console.log('💰 Wallet balance:', balance / LAMPORTS_PER_SOL, 'SOL');
 
   if (balance < 0.1 * LAMPORTS_PER_SOL) {
-    console.log('\n⚠️  Low balance! Request airdrop...');
     try {
       const sig = await connection.requestAirdrop(wallet.publicKey, LAMPORTS_PER_SOL);
       await connection.confirmTransaction(sig);
-      console.log('✅ Airdrop successful!');
       const newBalance = await connection.getBalance(wallet.publicKey);
-      console.log('💰 New balance:', newBalance / LAMPORTS_PER_SOL, 'SOL');
     } catch (e) {
-      console.log('❌ Airdrop failed (rate limited?):', e.message);
-      console.log('   Get devnet SOL from: https://faucet.solana.com/');
       return;
     }
   }
@@ -87,19 +77,14 @@ async function main() {
     [SUBSCRIPTION_SEED, wallet.publicKey.toBuffer()],
     PROGRAM_ID
   );
-  console.log('\n📍 Subscription PDA:', subscriptionPDA.toBase58());
 
   // Check if PDA already has funds
   const pdaBalance = await connection.getBalance(subscriptionPDA);
   if (pdaBalance > 0) {
-    console.log('💰 PDA already has:', pdaBalance / LAMPORTS_PER_SOL, 'SOL');
-    console.log('   This would be the escrowed subscription amount.');
   }
 
   // Test subscription payment (weekly plan)
   const plan = PLANS.weekly;
-  console.log(`\n📋 Testing ${plan.days}-day subscription...`);
-  console.log(`   Price: ${plan.price} SOL`);
 
   // Create transfer instruction to PDA (simulating escrow deposit)
   // Note: In the real contract, this would be done by the program
@@ -112,7 +97,6 @@ async function main() {
 
   const transaction = new Transaction().add(transferIx);
 
-  console.log('\n🔐 Signing and sending transaction...');
   
   try {
     const signature = await sendAndConfirmTransaction(
@@ -121,19 +105,10 @@ async function main() {
       [wallet]
     );
     
-    console.log('✅ Transaction successful!');
-    console.log('   Signature:', signature);
-    console.log('   View on Solscan: https://solscan.io/tx/' + signature + '?cluster=devnet');
 
     // Check new PDA balance
     const newPdaBalance = await connection.getBalance(subscriptionPDA);
-    console.log('\n💰 PDA escrow balance:', newPdaBalance / LAMPORTS_PER_SOL, 'SOL');
 
-    console.log('\n✅ PAYMENT TEST SUCCESSFUL!');
-    console.log('   The subscription escrow mechanism works.');
-    console.log('   In the full contract, this SOL would be locked until:');
-    console.log('   - User cancels (proportional refund)');
-    console.log('   - Subscription expires (treasury claims)');
 
   } catch (error) {
     console.error('❌ Transaction failed:', error.message);
@@ -142,12 +117,10 @@ async function main() {
 
 // Cleanup function to reclaim test funds
 async function cleanup() {
-  console.log('\n🧹 Cleanup: Reclaiming funds from PDA...');
   const connection = new Connection(RPC_URL, 'confirmed');
   
   const walletPath = path.join(__dirname, '..', 'test-wallet-keypair.json');
   if (!fs.existsSync(walletPath)) {
-    console.log('No wallet found.');
     return;
   }
   
@@ -160,11 +133,9 @@ async function cleanup() {
   );
   
   const pdaBalance = await connection.getBalance(subscriptionPDA);
-  console.log('PDA balance:', pdaBalance / LAMPORTS_PER_SOL, 'SOL');
   
   // Note: In production, only the program can transfer from PDA
   // This cleanup would require program instruction
-  console.log('Note: Full cleanup requires program cancel instruction.');
 }
 
 // Run

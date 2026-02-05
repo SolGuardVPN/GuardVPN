@@ -43,9 +43,6 @@ async function initSolana() {
     
     program = new anchor.Program(idl, PROGRAM_ID, provider);
     
-    console.log('✅ Connected to Solana');
-    console.log(`   RPC: ${RPC_URL}`);
-    console.log(`   Program ID: ${PROGRAM_ID}`);
     
     // Fetch nodes on startup
     await refreshNodes();
@@ -55,7 +52,6 @@ async function initSolana() {
     
   } catch (error) {
     console.error('❌ Failed to initialize Solana:', error.message);
-    console.log('⚠️  Using fallback nodes (real server only)');
     
     // Use fallback nodes
     addFallbackNodes();
@@ -66,7 +62,6 @@ async function initSolana() {
 async function refreshNodes() {
   try {
     if (!program) {
-      console.log('⚠️  Program not initialized, using fallback nodes');
       // Add fallback nodes when blockchain is unavailable
       addFallbackNodes();
       return;
@@ -108,7 +103,6 @@ async function refreshNodes() {
       }
     });
     
-    console.log(`📡 Fetched ${nodeCache.length} nodes from blockchain`);
     
   } catch (error) {
     console.error('Error fetching nodes:', error.message);
@@ -138,7 +132,6 @@ function addRealServerNode() {
 function addFallbackNodes() {
   nodeCache.length = 0;
   addRealServerNode();
-  console.log(`📍 Using ${nodeCache.length} real server nodes`);
 }
 
 // Map region codes to location names
@@ -250,18 +243,6 @@ app.post('/refresh', async (req, res) => {
 // Start server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, async () => {
-  console.log('');
-  console.log('═══════════════════════════════════════════════');
-  console.log('   DVPN Real API Server');
-  console.log('═══════════════════════════════════════════════');
-  console.log(`   🌐 API: http://localhost:${PORT}`);
-  console.log(`   ✅ Health: http://localhost:${PORT}/health`);
-  console.log(`   📍 Nodes: http://localhost:${PORT}/nodes`);
-  console.log(`   📊 Sessions: http://localhost:${PORT}/sessions`);
-  console.log(`   🔄 Refresh: POST http://localhost:${PORT}/refresh`);
-  console.log('');
-  console.log('   Fetching nodes from Solana blockchain...');
-  console.log('═══════════════════════════════════════════════');
   
   await initSolana();
 });

@@ -77,7 +77,6 @@ async function loadNodesFromIndexer() {
   locationsList.innerHTML = '<div style="padding: 20px; color: #8A8A8A; text-align: center;">Loading nodes...</div>';
   
   try {
-    console.log('Fetching nodes from:', settings.indexerUrl);
     
     // Add timeout to fetch
     const controller = new AbortController();
@@ -100,7 +99,6 @@ async function loadNodesFromIndexer() {
     const data = await response.json();
     const nodes = data.nodes || [];
     
-    console.log(`Loaded ${nodes.length} nodes from indexer`);
     
     if (nodes.length === 0) {
       locationsList.innerHTML = `
@@ -545,7 +543,6 @@ async function connect() {
     statusCircle.classList.add('connecting');
     statusText.textContent = 'Connecting...';
     
-    console.log('Connecting to node:', state.selectedNode.endpoint);
     
     // Calculate payment amount based on subscription type
     const paymentAmount = calculateSubscriptionPrice(state.selectedNode);
@@ -636,7 +633,6 @@ async function connect() {
 async function processPayment(recipientAddress, amountLamports) {
   try {
     const recipient = recipientAddress || settings.providerWallet;
-    console.log(`Processing payment: ${amountLamports} lamports to ${recipient}`);
     
     // Use Electron IPC for real payments
     if (window.electron && window.electron.processPayment && window.testKeypair) {
@@ -647,7 +643,6 @@ async function processPayment(recipientAddress, amountLamports) {
       });
       
       if (result.success) {
-        console.log('✅ Payment successful! Tx:', result.signature);
         return true;
       } else {
         console.error('❌ Payment failed:', result.error);
@@ -656,7 +651,6 @@ async function processPayment(recipientAddress, amountLamports) {
     }
     
     // Fallback to mock payment
-    console.log('⚠️ Mock payment mode');
     await new Promise(resolve => setTimeout(resolve, 1500));
     return true;
     

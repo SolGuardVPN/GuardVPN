@@ -58,9 +58,6 @@ class HashChainPayment {
     // The final hash is the commitment
     const commitment = hashes[hashes.length - 1];
     
-    console.log('✅ Hash chain generated:');
-    console.log('   Length:', length);
-    console.log('   Commitment:', commitment.toString('hex').slice(0, 16) + '...');
     
     return {
       preimages: preimages,
@@ -111,10 +108,6 @@ class HashChainPayment {
     // Store commitment on-chain
     const commitment = Buffer.from(hashChain.commitment, 'hex');
 
-    console.log('📝 Creating session with hash-chain:');
-    console.log('   Session PDA:', sessionPda.toBase58());
-    console.log('   Chain length:', hashChain.length);
-    console.log('   Commitment:', hashChain.commitment.slice(0, 16) + '...');
 
     // In production, this would use a new instruction variant
     // For now, simulate with existing open_session
@@ -152,7 +145,6 @@ class HashChainPayment {
       timestamp: Date.now()
     });
 
-    console.log(`🔓 Preimage revealed [${index}/${sessionState.hashChain.length}]`);
     
     return {
       index: index,
@@ -186,7 +178,6 @@ class HashChainPayment {
       }
     }
 
-    console.log(`✅ Hash chain verified: ${revealed.length} links`);
     return { valid: true, verified: revealed.length };
   }
 
@@ -200,10 +191,6 @@ class HashChainPayment {
     lastRevealed,
     amountToClaim
   ) {
-    console.log('💰 Claiming payment with hash-chain proof:');
-    console.log('   Session:', sessionPda.toBase58());
-    console.log('   Last index:', lastRevealed.index);
-    console.log('   Amount:', amountToClaim);
 
     // In production, this would call a new instruction:
     // claim_with_hashchain_proof(last_preimage, last_index, amount)
@@ -232,12 +219,9 @@ class HashChainPayment {
    * Automatically reveals preimages at intervals
    */
   startAutoReveal(sessionState, intervalMs, callback) {
-    console.log('🔄 Starting auto-reveal daemon...');
-    console.log('   Interval:', intervalMs, 'ms');
 
     const interval = setInterval(() => {
       if (sessionState.currentIndex >= sessionState.hashChain.length) {
-        console.log('✅ All preimages revealed');
         clearInterval(interval);
         return;
       }
@@ -345,7 +329,6 @@ async function exampleUsage() {
     sessionState,
     60000, // 60 seconds
     (revealed) => {
-      console.log('📤 Sending preimage to provider:', revealed.index);
       // Send to provider via API
     }
   );

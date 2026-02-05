@@ -23,7 +23,6 @@ function loadSessionsFromFile() {
   try {
     if (fs.existsSync(SESSIONS_FILE)) {
       const data = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8'));
-      console.log(`📂 Loaded ${data.sessions.length} sessions from file`);
       return data.sessions || [];
     }
   } catch (error) {
@@ -39,7 +38,6 @@ function saveSessionsToFile() {
       sessions: activeSessions,
       updated_at: new Date().toISOString()
     }, null, 2));
-    console.log(`💾 Saved ${activeSessions.length} sessions to file`);
   } catch (error) {
     console.error('Error saving sessions file:', error.message);
   }
@@ -53,7 +51,6 @@ function loadNodesFromConfig() {
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-      console.log(`📁 Loaded ${config.nodes.length} nodes from config file`);
       return config.nodes.map((node, index) => ({
         pubkey: node.endpoint,
         provider: node.provider_wallet,
@@ -85,7 +82,6 @@ const NODES_TOPIC = 'dvpn-nodes-registry';
 // Initialize IPFS
 async function initIPFS() {
   try {
-    console.log('🚀 Starting IPFS node...');
     const { create } = await import('ipfs-core');
     ipfs = await create({
       repo: './ipfs-data',
@@ -98,14 +94,12 @@ async function initIPFS() {
     });
     
     const { id } = await ipfs.id();
-    console.log(`✅ IPFS ready - Peer ID: ${id}`);
     ipfsReady = true;
     
     // Subscribe to nodes topic
     await ipfs.pubsub.subscribe(NODES_TOPIC, (msg) => {
       try {
         const data = JSON.parse(new TextDecoder().decode(msg.data));
-        console.log(`📨 Received node from IPFS: ${data.endpoint}`);
         
         // Check if node exists, if not add it
         const exists = realNodes.find(n => n.provider === data.provider || n.endpoint === data.endpoint);
@@ -119,7 +113,6 @@ async function initIPFS() {
     
   } catch (error) {
     console.error('⚠️  IPFS initialization failed (API will work without IPFS):', error.message);
-    console.log('   To enable IPFS, upgrade to Node.js 22+ or use Helia instead of ipfs-core');
     ipfsReady = false;
   }
 }
@@ -127,14 +120,12 @@ async function initIPFS() {
 // Save node to IPFS
 async function saveToIPFS(nodeData) {
   if (!ipfsReady || !ipfs) {
-    console.log('⚠️  IPFS not ready, skipping IPFS storage');
     return null;
   }
   
   try {
     // Add to IPFS
     const { cid } = await ipfs.add(JSON.stringify(nodeData, null, 2));
-    console.log(`📝 Node saved to IPFS: ${cid}`);
     
     // Publish to PubSub
     await ipfs.pubsub.publish(
@@ -146,7 +137,6 @@ async function saveToIPFS(nodeData) {
       }))
     );
     
-    console.log(`📢 Node announced to IPFS network`);
     return cid.toString();
   } catch (error) {
     console.error('Error saving to IPFS:', error.message);
@@ -205,7 +195,6 @@ const defaultNodes = [
 
 // Load from config file or use defaults
 let realNodes = loadNodesFromConfig() || defaultNodes;
-console.log(`📡 Loaded ${realNodes.length} VPN nodes`);
 
 // API to reload config without restarting
 app.post('/reload-config', (req, res) => {
@@ -306,7 +295,6 @@ app.post('/nodes/:id/rate', async (req, res) => {
       return res.status(400).json({ error: 'Rating must be between 1 and 5' });
     }
     
-    console.log(`⭐ Node ${nodeId} rated ${rating} stars by ${wallet || 'anonymous'}`);
     
     // Find the node
     const node = realNodes.find(n => 
@@ -325,7 +313,6 @@ app.post('/nodes/:id/rate', async (req, res) => {
       node.rating_count += 1;
       
       const avgRating = (node.rating_sum / node.rating_count).toFixed(1);
-      console.log(`✅ Updated node rating: ${avgRating} (${node.rating_count} ratings)`);
       
       // Persist to config file
       try {
@@ -376,7 +363,6 @@ app.post('/nodes/:endpoint/config', async (req, res) => {
     const [serverIp] = node.endpoint.split(':');
     const ncatPort = 22222;
     
-    console.log(`🔌 Connecting to ncat at ${serverIp}:${ncatPort} to get WireGuard config...`);
     
     // Connect to server's ncat to get real WireGuard config
     const net = require('net');
@@ -389,7 +375,6 @@ app.post('/nodes/:endpoint/config', async (req, res) => {
         client.setTimeout(10000); // 10 second timeout
         
         client.connect(ncatPort, serverIp, () => {
-          console.log(`✅ Connected to ncat at ${serverIp}:${ncatPort}`);
           client.write('start\n');
         });
         
@@ -398,7 +383,6 @@ app.post('/nodes/:endpoint/config', async (req, res) => {
         });
         
         client.on('close', () => {
-          console.log(`📝 Received config from server (${responseData.length} bytes)`);
           resolve(responseData);
         });
         
@@ -437,7 +421,6 @@ app.post('/nodes/:endpoint/config', async (req, res) => {
       const dnsMatch = serverConfig.match(/DNS\s*=\s*([^\n]+)/);
       const dns = dnsMatch ? dnsMatch[1].trim() : '8.8.8.8,8.8.4.4';
       
-      console.log(`✅ Parsed config - Client IP: ${clientIP}, Server PubKey: ${serverPublicKey?.substring(0, 10)}...`);
       
       res.json({
         success: true,
@@ -453,7 +436,6 @@ app.post('/nodes/:endpoint/config', async (req, res) => {
       
     } catch (ncatError) {
       console.error(`⚠️ Failed to get config from ncat: ${ncatError.message}`);
-      console.log('   Falling back to generated config with correct subnet');
       
       // Fallback: Generate config with CORRECT subnet (10.0.1.x to match server)
       const clientIP = `10.0.1.${Math.floor(Math.random() * 200) + 10}/24`;
@@ -538,7 +520,6 @@ app.post('/nodes', async (req, res) => {
         is_active: is_active !== false
       });
       fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
-      console.log(`💾 Node saved to config file: ${vpn_endpoint}`);
     } catch (configErr) {
       console.error('Error saving node to config:', configErr.message);
     }
@@ -548,7 +529,6 @@ app.post('/nodes', async (req, res) => {
     try {
       ipfsCid = await ipfsNodes.publishNodesToIPFS(realNodes);
       if (ipfsCid) {
-        console.log(`📡 Registry updated on IPFS: ${ipfsCid}`);
         newNode.ipfs_cid = ipfsCid;
       }
     } catch (ipfsErr) {
@@ -686,7 +666,6 @@ app.post('/sessions', async (req, res) => {
     // Save to file
     saveSessionsToFile();
     
-    console.log(`✅ Session created: ${session.id} for wallet ${user_wallet}`);
     
     res.json({ 
       success: true,
@@ -734,7 +713,6 @@ app.put('/sessions/:id/end', async (req, res) => {
     // Save to file
     saveSessionsToFile();
     
-    console.log(`🔚 Session ended: ${sessionId}, duration: ${durationMinutes} min, cost: ${cost / 1e9} SOL`);
     
     res.json({ 
       success: true,
@@ -783,7 +761,6 @@ app.put('/sessions/end-by-wallet/:wallet', async (req, res) => {
     // Save to file
     saveSessionsToFile();
     
-    console.log(`🔚 Session ended for wallet ${wallet}: duration: ${durationMinutes} min`);
     
     res.json({ 
       success: true,
@@ -928,7 +905,6 @@ app.post('/providers/:wallet/withdraw', async (req, res) => {
     withdrawals.push(withdrawal);
     saveWithdrawalsToFile();
     
-    console.log(`💸 Withdrawal initiated: ${withdrawal.id} for ${withdrawal.amount_sol} SOL to ${wallet}`);
     
     // In a real system, this would:
     // 1. Call the Solana program's claim_payout instruction
@@ -941,7 +917,6 @@ app.post('/providers/:wallet/withdraw', async (req, res) => {
       withdrawal.completed_at = new Date().toISOString();
       withdrawal.tx_signature = `simulated_${Date.now()}`;
       saveWithdrawalsToFile();
-      console.log(`✅ Withdrawal completed: ${withdrawal.id}`);
     }, 2000);
     
     res.json({
@@ -979,7 +954,6 @@ app.get('/providers/:wallet/withdrawals', async (req, res) => {
 // Publish all nodes to IPFS (permanent storage via Pinata)
 app.post('/ipfs/publish', async (req, res) => {
   try {
-    console.log('📤 Publishing nodes to IPFS via Pinata...');
     
     const cid = await ipfsNodes.publishNodesToIPFS(realNodes);
     
@@ -1027,7 +1001,6 @@ app.get('/ipfs/pins', async (req, res) => {
 app.get('/ipfs/fetch/:cid', async (req, res) => {
   try {
     const cid = req.params.cid;
-    console.log(`📥 Fetching nodes from IPFS: ${cid}`);
     
     const data = await ipfsNodes.fetchFromIPFS(cid);
     res.json({
@@ -1075,28 +1048,10 @@ app.get('/ipfs/registry', (req, res) => {
 // Start server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, async () => {
-  console.log('');
-  console.log('═══════════════════════════════════════════════');
-  console.log('   DVPN API - Real Nodes + IPFS Registry');
-  console.log('═══════════════════════════════════════════════');
-  console.log(`   🌐 API: http://localhost:${PORT}`);
-  console.log(`   ✅ Health: http://localhost:${PORT}/health`);
-  console.log(`   📍 Nodes: http://localhost:${PORT}/nodes`);
-  console.log('');
-  console.log(`   ✅ Serving ${realNodes.length} real VPN node(s)`);
-  console.log('');
-  console.log('   📦 IPFS Endpoints:');
-  console.log(`      POST /ipfs/publish - Publish nodes to IPFS`);
-  console.log(`      GET  /ipfs/fetch/:cid - Fetch nodes from IPFS`);
-  console.log(`      POST /ipfs/sync - Sync nodes from IPFS registry`);
-  console.log(`      GET  /ipfs/registry - Get registry info`);
-  console.log('═══════════════════════════════════════════════');
   
   // Auto-sync from known registries on startup
   const registry = ipfsNodes.loadRegistry();
   if (registry.registryCid) {
-    console.log(`\n📥 Syncing from IPFS registry: ${registry.registryCid}`);
     realNodes = await ipfsNodes.syncNodesFromIPFS(realNodes, registry.registryCid);
-    console.log(`   Total nodes: ${realNodes.length}`);
   }
 });

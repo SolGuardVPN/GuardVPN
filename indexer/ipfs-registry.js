@@ -15,7 +15,6 @@ const nodesCache = new Map(); // Local cache of active nodes
 
 // Initialize IPFS node
 async function initIPFS() {
-  console.log('🚀 Starting IPFS node...');
   
   ipfs = await IPFS.create({
     repo: './ipfs-data',
@@ -30,9 +29,6 @@ async function initIPFS() {
   });
   
   const { id, agentVersion, protocolVersion } = await ipfs.id();
-  console.log('✅ IPFS node started');
-  console.log(`   Peer ID: ${id}`);
-  console.log(`   Version: ${agentVersion}`);
   
   // Subscribe to nodes topic
   await subscribeToNodes();
@@ -42,12 +38,10 @@ async function initIPFS() {
 
 // Subscribe to node announcements via PubSub
 async function subscribeToNodes() {
-  console.log(`📡 Subscribing to topic: ${NODES_TOPIC}`);
   
   await ipfs.pubsub.subscribe(NODES_TOPIC, (msg) => {
     try {
       const data = JSON.parse(new TextDecoder().decode(msg.data));
-      console.log(`📨 Received node announcement from ${data.endpoint}`);
       
       // Update cache
       nodesCache.set(data.pubkey, {
@@ -72,7 +66,6 @@ async function subscribeToNodes() {
 async function publishNodeInfo(nodeData) {
   // Store node data in IPFS
   const { cid } = await ipfs.add(JSON.stringify(nodeData, null, 2));
-  console.log(`📝 Node info stored in IPFS: ${cid}`);
   
   // Announce via PubSub
   const announcement = {
@@ -86,7 +79,6 @@ async function publishNodeInfo(nodeData) {
     new TextEncoder().encode(JSON.stringify(announcement))
   );
   
-  console.log(`📢 Announced node to network: ${nodeData.endpoint}`);
   
   return cid.toString();
 }
@@ -208,18 +200,6 @@ async function start() {
   
   const PORT = process.env.PORT || 8080;
   app.listen(PORT, () => {
-    console.log('');
-    console.log('═══════════════════════════════════════════════');
-    console.log('   DVPN IPFS Registry Running');
-    console.log('═══════════════════════════════════════════════');
-    console.log(`   API: http://localhost:${PORT}`);
-    console.log(`   Health: http://localhost:${PORT}/health`);
-    console.log(`   Nodes: http://localhost:${PORT}/nodes`);
-    console.log('');
-    console.log('   🌐 Fully decentralized - no database!');
-    console.log('   📡 Node discovery via IPFS PubSub');
-    console.log('   🔒 Censorship resistant');
-    console.log('═══════════════════════════════════════════════');
   });
 }
 
@@ -227,7 +207,6 @@ async function start() {
 setTimeout(async () => {
   if (!ipfs) return;
   
-  console.log('📢 Publishing demo nodes...');
   
   // Demo node 1
   await publishNodeInfo({
@@ -259,7 +238,6 @@ setTimeout(async () => {
     reputation_score: 1000
   });
   
-  console.log('✅ Demo nodes published to IPFS network');
 }, 5000);
 
 start().catch(console.error);

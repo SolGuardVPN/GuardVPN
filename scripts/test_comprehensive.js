@@ -19,10 +19,6 @@ async function main() {
   // Program ID
   const programId = new PublicKey("8LQKwvHJPdK6fKmopXmUwct8JjVGQhf3RFQd64nCV39i");
   
-  console.log("\\n🧪 COMPREHENSIVE DVPN TEST SUITE");
-  console.log("=".repeat(50));
-  console.log("Program ID:", programId.toString());
-  console.log("Wallet:", wallet.publicKey.toString());
   
   // Calculate PDAs
   const [providerPda] = await PublicKey.findProgramAddress(
@@ -44,48 +40,34 @@ async function main() {
   };
   
   // Test 1: Provider exists
-  console.log("\\n📋 TEST 1: Check Provider Account");
-  console.log("-".repeat(50));
   try {
     const providerAccount = await connection.getAccountInfo(providerPda);
     if (providerAccount) {
-      console.log("✅ Provider account exists");
-      console.log("   PDA:", providerPda.toString());
-      console.log("   Size:", providerAccount.data.length, "bytes");
       testResults.passed++;
       testResults.tests.push({ name: "Provider account", status: "✅ PASS" });
     } else {
       throw new Error("Provider not found");
     }
   } catch (err) {
-    console.log("❌ FAILED:", err.message);
     testResults.failed++;
     testResults.tests.push({ name: "Provider account", status: "❌ FAIL" });
   }
   
   // Test 2: Node exists
-  console.log("\\n📋 TEST 2: Check Node Account");
-  console.log("-".repeat(50));
   try {
     const nodeAccount = await connection.getAccountInfo(nodePda);
     if (nodeAccount) {
-      console.log("✅ Node account exists");
-      console.log("   PDA:", nodePda.toString());
-      console.log("   Size:", nodeAccount.data.length, "bytes");
       testResults.passed++;
       testResults.tests.push({ name: "Node account", status: "✅ PASS" });
     } else {
       throw new Error("Node not found");
     }
   } catch (err) {
-    console.log("❌ FAILED:", err.message);
     testResults.failed++;
     testResults.tests.push({ name: "Node account", status: "❌ FAIL" });
   }
   
   // Test 3: Create session
-  console.log("\\n📋 TEST 3: Create Session");
-  console.log("-".repeat(50));
   const sessionId = Date.now().toString();
   const [sessionPda] = await PublicKey.findProgramAddress(
     [Buffer.from("session"), wallet.publicKey.toBuffer(), nodePda.toBuffer(), Buffer.from(sessionId)],
@@ -134,17 +116,10 @@ async function main() {
     const balanceAfter = await connection.getBalance(wallet.publicKey);
     const spent = (balanceBefore - balanceAfter) / LAMPORTS_PER_SOL;
     
-    console.log("✅ Session created successfully");
-    console.log("   Signature:", signature);
-    console.log("   Session PDA:", sessionPda.toString());
-    console.log("   Escrow: 0.01 SOL");
-    console.log("   Total spent:", spent.toFixed(4), "SOL");
     testResults.passed++;
     testResults.tests.push({ name: "Create session", status: "✅ PASS" });
     
     // Test 4: Close session
-    console.log("\\n📋 TEST 4: Close Session (Refund Test)");
-    console.log("-".repeat(50));
     
     try {
       const closeSessionDiscriminator = Buffer.from([
@@ -167,65 +142,43 @@ async function main() {
       
       await sleep(1000);
       
-      console.log("✅ Session closed successfully");
-      console.log("   Signature:", signature2);
-      console.log("   Refund processed");
       testResults.passed++;
       testResults.tests.push({ name: "Close session", status: "✅ PASS" });
       
       // Verify session account is closed
       const closedAccount = await connection.getAccountInfo(sessionPda);
       if (!closedAccount) {
-        console.log("✅ Session account properly closed");
       }
     } catch (err) {
-      console.log("❌ FAILED:", err.message);
       testResults.failed++;
       testResults.tests.push({ name: "Close session", status: "❌ FAIL" });
     }
     
   } catch (err) {
-    console.log("❌ FAILED:", err.message);
     if (err.logs) {
-      console.log("Logs:", err.logs.slice(0, 3).join("\\n"));
     }
     testResults.failed++;
     testResults.tests.push({ name: "Create session", status: "❌ FAIL" });
   }
   
   // Test 5: Provider balance check
-  console.log("\\n📋 TEST 5: Provider Earnings");
-  console.log("-".repeat(50));
   try {
     const providerBalance = await connection.getBalance(providerPda);
-    console.log("✅ Provider account balance:", providerBalance / LAMPORTS_PER_SOL, "SOL");
     testResults.passed++;
     testResults.tests.push({ name: "Provider earnings", status: "✅ PASS" });
   } catch (err) {
-    console.log("❌ FAILED:", err.message);
     testResults.failed++;
     testResults.tests.push({ name: "Provider earnings", status: "❌ FAIL" });
   }
   
   // Summary
-  console.log("\\n" + "=".repeat(50));
-  console.log("📊 TEST SUMMARY");
-  console.log("=".repeat(50));
-  console.log("Total tests:", testResults.passed + testResults.failed);
-  console.log("✅ Passed:", testResults.passed);
-  console.log("❌ Failed:", testResults.failed);
-  console.log("\\nTest Results:");
   testResults.tests.forEach((test, i) => {
-    console.log(`  ${i + 1}. ${test.name}: ${test.status}`);
   });
   
   const successRate = (testResults.passed / (testResults.passed + testResults.failed) * 100).toFixed(1);
-  console.log("\\n🎯 Success Rate:", successRate + "%");
   
   if (testResults.failed === 0) {
-    console.log("\\n🎉 ALL TESTS PASSED!");
   } else {
-    console.log("\\n⚠️  Some tests failed. Review logs above.");
   }
 }
 

@@ -46,7 +46,6 @@ function loadRegistry() {
 function saveRegistry(registry) {
   try {
     fs.writeFileSync(REGISTRY_FILE, JSON.stringify(registry, null, 2));
-    console.log('💾 IPFS registry saved');
   } catch (error) {
     console.error('Error saving IPFS registry:', error.message);
   }
@@ -57,7 +56,6 @@ async function fetchFromIPFS(cid) {
   for (const gateway of IPFS_GATEWAYS) {
     try {
       const url = gateway + cid;
-      console.log(`🌐 Fetching from ${gateway}...`);
       
       const data = await new Promise((resolve, reject) => {
         const req = https.get(url, { timeout: 10000 }, (res) => {
@@ -90,7 +88,6 @@ async function fetchFromIPFS(cid) {
       
       return JSON.parse(data);
     } catch (error) {
-      console.log(`   ❌ ${gateway}: ${error.message}`);
     }
   }
   throw new Error('All IPFS gateways failed');
@@ -101,7 +98,6 @@ async function uploadToIPFS(data, apiToken = PINATA_JWT) {
   const token = apiToken || PINATA_JWT;
   
   if (!token) {
-    console.log('⚠️  No Pinata JWT token configured');
     return null;
   }
   
@@ -133,7 +129,6 @@ async function uploadToIPFS(data, apiToken = PINATA_JWT) {
       res.on('end', () => {
         if (res.statusCode === 200) {
           const result = JSON.parse(data);
-          console.log(`✅ Uploaded to IPFS via Pinata: ${result.IpfsHash}`);
           resolve(result.IpfsHash);
         } else {
           console.error(`❌ Pinata error: ${res.statusCode} - ${data}`);
@@ -154,14 +149,11 @@ async function getNodesFromIPFS(registryCid = null) {
   const cidToUse = registryCid || registry.registryCid;
   
   if (!cidToUse) {
-    console.log('📭 No IPFS registry CID known. Using local nodes only.');
     return [];
   }
   
   try {
-    console.log(`📥 Fetching nodes from IPFS: ${cidToUse}`);
     const data = await fetchFromIPFS(cidToUse);
-    console.log(`✅ Loaded ${data.nodes?.length || 0} nodes from IPFS`);
     return data.nodes || [];
   } catch (error) {
     console.error('❌ Failed to fetch from IPFS:', error.message);
@@ -199,10 +191,6 @@ async function publishNodesToIPFS(nodes, apiToken = PINATA_JWT) {
       localRegistry.nodeCount = nodes.length;
       saveRegistry(localRegistry);
       
-      console.log(`\n📡 IPFS Node Registry Published via Pinata!`);
-      console.log(`   CID: ${cid}`);
-      console.log(`   View: https://gateway.pinata.cloud/ipfs/${cid}`);
-      console.log(`   Public: https://ipfs.io/ipfs/${cid}`);
     }
     
     return cid;
@@ -255,7 +243,6 @@ async function unpinFile(cid, apiToken = PINATA_JWT) {
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
         if (res.statusCode === 200) {
-          console.log(`🗑️  Unpinned: ${cid}`);
           resolve(true);
         } else {
           reject(new Error(`Unpin failed: ${res.statusCode}`));
@@ -306,7 +293,6 @@ async function syncNodesFromIPFS(localNodes, registryCid = null) {
     }
     
     if (added > 0) {
-      console.log(`✅ Added ${added} nodes from IPFS`);
     }
     
     return localNodes;

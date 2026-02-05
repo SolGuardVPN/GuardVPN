@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Connect Phantom Wallet - DVPN</title>
+  <title>Connect Phantom Wallet - GVPN</title>
   <style>
     * {
       margin: 0;
@@ -184,7 +184,7 @@
       </defs>
     </svg>
     
-    <h1>Connect to DVPN</h1>
+    <h1>Connect to GVPN</h1>
     <p class="subtitle">Securely connect your Phantom wallet</p>
     
     <div id="status" class="status detecting">
@@ -212,7 +212,7 @@
         <li>Make sure Phantom extension is installed</li>
         <li>Click "Connect Phantom" button above</li>
         <li>Approve the connection in Phantom popup</li>
-        <li>You'll be redirected back to the DVPN app</li>
+        <li>You'll be redirected back to the GVPN app</li>
       </ol>
     </div>
   </div>
@@ -282,7 +282,6 @@
         statusEl.className = 'status detecting';
         statusEl.innerHTML = '<span class="spinner"></span> Waiting for Phantom approval...';
         
-        console.log('Attempting to connect to Phantom...');
         
         let publicKey;
         
@@ -290,14 +289,11 @@
         try {
           const eagerResponse = await provider.connect({ onlyIfTrusted: true });
           publicKey = eagerResponse.publicKey.toString();
-          console.log('Eager connect succeeded:', publicKey);
         } catch (eagerErr) {
-          console.log('Eager connect failed, trying regular connect...');
           
           // Regular connect - this should open Phantom popup
           const response = await provider.connect();
           publicKey = response.publicKey.toString();
-          console.log('Regular connect succeeded:', publicKey);
         }
         
         handleConnected(publicKey);
@@ -351,7 +347,7 @@
       
       // Send back to Electron app via HTTP callback (works in dev mode)
       setTimeout(() => {
-        statusEl.innerHTML = '✅ Sending to DVPN app...';
+        statusEl.innerHTML = '✅ Sending to GVPN app...';
         
         // Use HTTP callback instead of custom protocol
         const callbackUrl = `http://localhost:8765/wallet-callback?publicKey=${encodeURIComponent(publicKey)}`;

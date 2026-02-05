@@ -1,5 +1,5 @@
 {
-  "name": "dvpn-client",
+  "name": "gvpn-client",
   "version": "1.0.0",
   "description": "Decentralized VPN Client",
   "main": "main.js",
@@ -17,7 +17,7 @@
     "solana",
     "wireguard"
   ],
-  "author": "DVPN Team",
+  "author": "GVPN Team",
   "license": "MIT",
   "dependencies": {
     "@coral-xyz/anchor": "^0.28.0",
@@ -36,13 +36,13 @@
     "electron-icon-builder": "^2.0.1"
   },
   "build": {
-    "appId": "com.dvpn.client",
-    "productName": "DVPN Client",
+    "appId": "com.gvpn.client",
+    "productName": "GVPN",
     "icon": "assets/icons/icon",
     "protocols": {
-      "name": "DVPN Protocol",
+      "name": "GVPN Protocol",
       "schemes": [
-        "dvpn"
+        "gvpn"
       ]
     },
     "files": [
@@ -67,15 +67,15 @@
         }
       ],
       "icon": "assets/icons/icon.ico",
-      "publisherName": "DVPN Team"
+      "publisherName": "GVPN Team"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "DVPN Client",
-      "uninstallDisplayName": "DVPN Client",
+      "shortcutName": "GVPN",
+      "uninstallDisplayName": "GVPN",
       "deleteAppDataOnUninstall": true
     },
     "linux": {

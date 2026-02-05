@@ -144,7 +144,6 @@ app.post('/nodes/:id/rate', async (req, res) => {
       return res.status(400).json({ error: 'Rating must be between 1 and 5' });
     }
     
-    console.log(`⭐ Node ${nodeId} rated ${rating} stars by ${wallet || 'anonymous'}`);
     
     // Try to update node in database
     try {
@@ -161,7 +160,6 @@ app.post('/nodes/:id/rate', async (req, res) => {
       if (result.rows.length > 0) {
         const node = result.rows[0];
         const avgRating = node.rating_count > 0 ? (node.rating_sum / node.rating_count).toFixed(1) : rating;
-        console.log(`✅ Updated node rating: ${avgRating} (${node.rating_count} ratings)`);
         return res.json({ 
           success: true, 
           average_rating: parseFloat(avgRating),
@@ -186,14 +184,4 @@ app.post('/nodes/:id/rate', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🌐 API server running on http://localhost:${PORT}`);
-  console.log(`📊 Endpoints:`);
-  console.log(`   GET /health`);
-  console.log(`   GET /nodes?region=&min_reputation=&limit=`);
-  console.log(`   GET /nodes/:pubkey`);
-  console.log(`   POST /nodes/:id/rate`);
-  console.log(`   GET /sessions?user=&node=&state=&limit=`);
-  console.log(`   GET /sessions/:pubkey`);
-  console.log(`   GET /providers/:pubkey`);
-  console.log(`   GET /stats`);
 });

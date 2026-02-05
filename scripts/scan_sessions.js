@@ -13,21 +13,16 @@ async function main(){
   const disc = Buffer.from([243,81,72,115,214,188,72,144]);
   const discBase58 = bs58.encode(disc);
 
-  console.log('scanning program accounts for Session discriminator (this may be slow)...');
   const accounts = await provider.connection.getProgramAccounts(programId, {
     filters: [{ memcmp: { offset: 0, bytes: discBase58 } }],
     commitment: 'confirmed'
   });
 
-  console.log('matched accounts:', accounts.length);
   for (const a of accounts) {
     const pk = a.pubkey;
     try {
       // decode via Anchor program account fetch (may perform another RPC)
       const session = await program.account.session.fetch(pk);
-      console.log('---');
-      console.log('session pda:', pk.toBase58());
-      console.log({
         user: session.user.toBase58(),
         node: session.node.toBase58(),
         session_id: session.sessionId?.toString ? session.sessionId.toString() : session.session_id?.toString(),
@@ -38,7 +33,6 @@ async function main(){
         bump: session.bump
       });
     } catch (e) {
-      console.log('failed to decode session at', pk.toBase58(), e.message || e.toString());
     }
   }
 }

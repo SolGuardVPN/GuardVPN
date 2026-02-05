@@ -121,21 +121,13 @@ const server = http.createServer((req, res) => {
 const PORT = process.env.PORT || 8080;
 
 server.listen(PORT, () => {
-  console.log(`Mock Indexer API running on port ${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/health`);
-  console.log(`Nodes: http://localhost:${PORT}/nodes`);
-  console.log('');
-  console.log('Mock nodes available:');
   mockNodes.forEach(n => {
-    console.log(`  - ${n.region}: ${n.endpoint} (${n.pubkey.substring(0, 8)}...)`);
   });
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-  console.log('Shutting down...');
   server.close(() => {
-    console.log('Server closed');
     process.exit(0);
   });
 });

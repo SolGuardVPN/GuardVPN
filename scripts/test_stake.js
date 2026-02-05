@@ -3,8 +3,6 @@ const { PublicKey, SystemProgram, LAMPORTS_PER_SOL, Keypair } = require('@solana
 const fs = require('fs');
 
 async function main() {
-  console.log('\n📋 TEST 2: STAKE PROVIDER');
-  console.log('═══════════════════════════════════════════════════\n');
 
   // Load wallet
   const walletPath = './wallet.json';
@@ -19,8 +17,6 @@ async function main() {
   // Program ID
   const programId = new PublicKey('8LQKwvHJPdK6fKmopXmUwct8JjVGQhf3RFQd64nCV39i');
   
-  console.log('Program ID:', programId.toBase58());
-  console.log('Wallet:', wallet.publicKey.toBase58());
   
   // Load IDL
   const idl = JSON.parse(fs.readFileSync('./target/idl/dvpn.json', 'utf8'));
@@ -32,21 +28,16 @@ async function main() {
     programId
   );
   
-  console.log('Provider PDA:', providerPda.toBase58());
   
   // Check if provider exists
   try {
     const providerAccount = await program.account.provider.fetch(providerPda);
-    console.log('\n✅ Provider exists');
-    console.log('   Current stake:', providerAccount.stake.toString(), 'lamports');
   } catch (e) {
-    console.log('❌ Provider not found. Please run test_simple.js first');
     process.exit(1);
   }
   
   // Stake 0.5 SOL
   const stakeAmount = new anchor.BN(0.5 * LAMPORTS_PER_SOL);
-  console.log('\n📝 Staking', stakeAmount.toString(), 'lamports (0.5 SOL)...');
   
   try {
     const tx = await program.methods
@@ -58,19 +49,13 @@ async function main() {
       })
       .rpc();
     
-    console.log('✅ Stake successful! Signature:', tx);
     
     // Verify
     const updatedProvider = await program.account.provider.fetch(providerPda);
-    console.log('\n💰 Updated stake:', updatedProvider.stake.toString(), 'lamports');
-    console.log('   ≈', updatedProvider.stake.toNumber() / LAMPORTS_PER_SOL, 'SOL');
     
-    console.log('\n✅ Success!');
   } catch (error) {
     console.error('❌ Error:', error.message);
     if (error.logs) {
-      console.log('\nTransaction logs:');
-      error.logs.forEach(log => console.log(log));
     }
     process.exit(1);
   }

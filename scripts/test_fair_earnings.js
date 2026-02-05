@@ -115,25 +115,12 @@ function calculateFairEarnings(nodes, totalPoolLamports) {
 
 // Print results
 function printResults(result) {
-  console.log('\n' + '='.repeat(80));
-  console.log('⚡ FAIR EARNINGS DISTRIBUTION SIMULATION');
-  console.log('='.repeat(80));
   
-  console.log(`\n📊 Pool Summary:`);
-  console.log(`   Total Pool:      ${result.totalPoolSOL.toFixed(4)} SOL`);
-  console.log(`   Platform Fee:    ${result.platformFeeSOL.toFixed(4)} SOL (20%)`);
-  console.log(`   Provider Pool:   ${result.providerPoolSOL.toFixed(4)} SOL (80%)`);
   
-  console.log(`\n🎯 Weights: Usage ${USAGE_WEIGHT}% | Bandwidth ${BANDWIDTH_WEIGHT}% | Quality ${QUALITY_WEIGHT}%`);
   
-  console.log(`\n📈 TOP 10 Earning Nodes:`);
-  console.log('-'.repeat(80));
-  console.log(`${'Rank'.padEnd(6)}${'Node'.padEnd(12)}${'Region'.padEnd(14)}${'BW(Mbps)'.padEnd(10)}${'Rating'.padEnd(8)}${'Usage(h)'.padEnd(10)}${'Share'.padEnd(8)}${'Earnings'}`);
-  console.log('-'.repeat(80));
   
   result.earnings.slice(0, 10).forEach((node, idx) => {
     const usageHours = (node.usageSeconds / 3600).toFixed(1);
-    console.log(
       `${(idx + 1).toString().padEnd(6)}` +
       `${node.name.padEnd(12)}` +
       `${node.region.padEnd(14)}` +
@@ -145,11 +132,8 @@ function printResults(result) {
     );
   });
   
-  console.log(`\n📉 BOTTOM 10 Earning Nodes:`);
-  console.log('-'.repeat(80));
   result.earnings.slice(-10).forEach((node, idx) => {
     const usageHours = (node.usageSeconds / 3600).toFixed(1);
-    console.log(
       `${(result.earnings.length - 9 + idx).toString().padEnd(6)}` +
       `${node.name.padEnd(12)}` +
       `${node.region.padEnd(14)}` +
@@ -162,8 +146,6 @@ function printResults(result) {
   });
   
   // Compare high vs low quality nodes
-  console.log(`\n🔍 Quality Impact Analysis:`);
-  console.log('-'.repeat(80));
   
   const highQualityNodes = result.earnings.filter(n => n.bandwidthMbps >= 80 && n.qualityScore >= 4);
   const lowQualityNodes = result.earnings.filter(n => n.bandwidthMbps <= 20 && n.qualityScore <= 2);
@@ -175,25 +157,15 @@ function printResults(result) {
     ? lowQualityNodes.reduce((sum, n) => sum + n.earningsSOL, 0) / lowQualityNodes.length 
     : 0;
   
-  console.log(`   High-quality nodes (≥80 Mbps, ≥4⭐): ${highQualityNodes.length} nodes`);
-  console.log(`   Average earnings: ${avgHighEarnings.toFixed(6)} SOL`);
-  console.log(`\n   Low-quality nodes (≤20 Mbps, ≤2⭐): ${lowQualityNodes.length} nodes`);
-  console.log(`   Average earnings: ${avgLowEarnings.toFixed(6)} SOL`);
   
   if (avgLowEarnings > 0) {
     const multiplier = avgHighEarnings / avgLowEarnings;
-    console.log(`\n   ⚡ High-quality nodes earn ${multiplier.toFixed(1)}x more than low-quality nodes!`);
   }
   
-  console.log('\n' + '='.repeat(80));
 }
 
 // Compare specific scenarios
 function compareScenarios() {
-  console.log('\n\n');
-  console.log('═'.repeat(80));
-  console.log('📊 SPECIFIC SCENARIO: 100mbps vs 10mbps Node Comparison');
-  console.log('═'.repeat(80));
   
   // Create two nodes with same usage but different bandwidth
   const testNodes = [
@@ -203,15 +175,8 @@ function compareScenarios() {
   
   const result = calculateFairEarnings(testNodes, 1 * LAMPORTS_PER_SOL); // 1 SOL pool
   
-  console.log(`\n🔄 Same usage time (10 hours each), different characteristics:`);
-  console.log('-'.repeat(60));
   
   result.earnings.forEach(node => {
-    console.log(`\n   ${node.name}:`);
-    console.log(`      Bandwidth:  ${node.bandwidthMbps} Mbps`);
-    console.log(`      Rating:     ${'⭐'.repeat(node.qualityScore)} (${node.qualityScore}/5)`);
-    console.log(`      Share:      ${node.sharePercent.toFixed(2)}%`);
-    console.log(`      Earnings:   ${node.earningsSOL.toFixed(6)} SOL`);
   });
   
   const fastNode = result.earnings.find(n => n.name === 'Fast-Node');
@@ -219,18 +184,13 @@ function compareScenarios() {
   
   if (fastNode && slowNode && slowNode.earningsSOL > 0) {
     const ratio = fastNode.earningsSOL / slowNode.earningsSOL;
-    console.log(`\n   💡 Result: 100mbps node earns ${ratio.toFixed(1)}x more than 10mbps node!`);
   }
 }
 
 // Main execution
 async function main() {
-  console.log('🚀 Fair Earnings Distribution Simulator');
-  console.log('   Program ID:', PROGRAM_ID);
-  console.log('   Network:', RPC_URL);
   
   // Scenario 1: 100 node providers with 10 SOL pool
-  console.log('\n\n📌 SCENARIO 1: 100 Node Providers sharing 10 SOL pool');
   const nodes100 = generateSimulatedNodes(100);
   const result100 = calculateFairEarnings(nodes100, 10 * LAMPORTS_PER_SOL);
   printResults(result100);
@@ -238,9 +198,6 @@ async function main() {
   // Scenario 2: Compare 100mbps vs 10mbps specifically
   compareScenarios();
   
-  console.log('\n\n✅ Simulation complete!');
-  console.log('\nThis demonstrates how the on-chain fair earnings distribution works.');
-  console.log('Higher bandwidth + better ratings + more usage = higher earnings.');
 }
 
 main().catch(console.error);

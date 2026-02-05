@@ -51,7 +51,6 @@ async function loadNodesFromIndexer() {
   locationsList.innerHTML = '<div style="padding: 20px; color: #8A8A8A; text-align: center;">Loading nodes...</div>';
   
   try {
-    console.log('Fetching nodes from:', settings.indexerUrl);
     const response = await fetch(`${settings.indexerUrl}/nodes`);
     
     if (!response.ok) {
@@ -61,7 +60,6 @@ async function loadNodesFromIndexer() {
     const data = await response.json();
     const nodes = data.nodes || [];
     
-    console.log(`Loaded ${nodes.length} nodes from indexer`);
     
     if (nodes.length === 0) {
       locationsList.innerHTML = '<div style="padding: 20px; color: #8A8A8A; text-align: center;">No nodes available.<br><br>Start the indexer service:<br><code style="color: #00D4AA;">node scripts/mock_indexer.js</code></div>';
@@ -275,7 +273,6 @@ function connect() {
   statusCircle.classList.add('connecting');
   statusText.textContent = 'Connecting...';
   
-  console.log('Connecting to node:', state.selectedNode.endpoint);
   
   // Simulate connection delay
   setTimeout(() => {

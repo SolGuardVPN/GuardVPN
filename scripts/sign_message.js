@@ -8,4 +8,3 @@ if (!msg) { console.error('usage: node sign_message.js <message> [keypair.json]'
 const kp = JSON.parse(fs.readFileSync(keypath,'utf8'));
 const sk = Uint8Array.from(kp);
 const sig = nacl.sign.detached(Buffer.from(msg,'utf8'), sk);
-console.log(bs58.encode(sig));

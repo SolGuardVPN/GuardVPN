@@ -65,7 +65,6 @@ const KNOWN_NODES = [
 // Load persisted dynamic nodes and add to KNOWN_NODES
 const dynamicNodes = loadDynamicNodes();
 if (dynamicNodes.length > 0) {
-  console.log(`📂 Loaded ${dynamicNodes.length} persisted dynamic nodes`);
   dynamicNodes.forEach(node => {
     if (!KNOWN_NODES.some(n => n.pubkey === node.pubkey)) {
       KNOWN_NODES.push(node);
@@ -81,7 +80,6 @@ const ipfsNodesCache = new Map();
 // Initialize IPFS (non-blocking)
 async function initIPFS() {
   try {
-    console.log('🚀 Starting IPFS node (background)...');
     
     ipfs = await IPFS.create({
       repo: './ipfs-indexer-data',
@@ -97,7 +95,6 @@ async function initIPFS() {
     });
     
     const { id } = await ipfs.id();
-    console.log(`✅ IPFS ready - Peer ID: ${id}`);
     
     ipfsEnabled = true;
     
@@ -117,7 +114,6 @@ async function initIPFS() {
 async function subscribeToNodes() {
   if (!ipfs) return;
   
-  console.log(`📡 Subscribing to ${NODES_TOPIC}...`);
   
   await ipfs.pubsub.subscribe(NODES_TOPIC, (msg) => {
     try {
@@ -129,7 +125,6 @@ async function subscribeToNodes() {
         source: 'ipfs'
       });
       
-      console.log(`📨 Discovered node via IPFS: ${data.endpoint} (${data.location})`);
       
       // Clean old nodes (>60 minutes) - increased from 10 minutes to prevent premature removal
       // Only clean IPFS-discovered nodes, not bootstrap/dynamic nodes
@@ -137,7 +132,6 @@ async function subscribeToNodes() {
       for (const [key, node] of ipfsNodesCache.entries()) {
         const isKnownNode = KNOWN_NODES.some(n => n.pubkey === key);
         if (!isKnownNode && now - node.lastSeen > 60 * 60 * 1000) {
-          console.log(`🗑️  Removing stale IPFS node: ${node.endpoint} (last seen ${Math.floor((now - node.lastSeen) / 60000)} mins ago)`);
           ipfsNodesCache.delete(key);
         }
       }
@@ -146,14 +140,12 @@ async function subscribeToNodes() {
     }
   });
   
-  console.log('✅ Subscribed to IPFS node announcements');
 }
 
 // Publish known nodes to IPFS network
 async function publishKnownNodes() {
   if (!ipfs) return;
   
-  console.log('📢 Publishing known nodes to IPFS...');
   
   for (const node of KNOWN_NODES) {
     try {
@@ -177,7 +169,6 @@ async function publishKnownNodes() {
         new TextEncoder().encode(JSON.stringify(pubsubData))
       );
       
-      console.log(`   ✓ Published: ${node.endpoint} (CID: ${cid.toString().substring(0, 20)}...)`);
       
       await new Promise(resolve => setTimeout(resolve, 1000));
     } catch (error) {
@@ -185,7 +176,6 @@ async function publishKnownNodes() {
     }
   }
   
-  console.log('✅ Known nodes published to IPFS network');
 }
 
 // Get all nodes (hybrid: known + IPFS discovered)
@@ -311,11 +301,9 @@ app.post('/announce', async (req, res) => {
     
     if (existingIndex === -1) {
       KNOWN_NODES.push(newNode);
-      console.log(`✅ New node registered: ${nodeData.endpoint}`);
     } else {
       // Update existing node's lastSeen
       KNOWN_NODES[existingIndex] = { ...KNOWN_NODES[existingIndex], lastSeen: Date.now() };
-      console.log(`🔄 Node re-announced: ${nodeData.endpoint}`);
     }
     
     // Persist dynamic nodes to file
@@ -414,26 +402,11 @@ app.get('/ipfs/stats', async (req, res) => {
 const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, () => {
-  console.log('');
-  console.log('═══════════════════════════════════════════════');
-  console.log('   DVPN Hybrid Indexer (API + IPFS)');
-  console.log('═══════════════════════════════════════════════');
-  console.log(`   🌐 API: http://localhost:${PORT}`);
-  console.log(`   ✅ Health: http://localhost:${PORT}/health`);
-  console.log(`   📍 Nodes: http://localhost:${PORT}/nodes`);
-  console.log(`   📊 IPFS Stats: http://localhost:${PORT}/ipfs/stats`);
-  console.log('');
-  console.log(`   📦 Bootstrap Nodes: ${KNOWN_NODES.length}`);
-  console.log('   🌍 IPFS Discovery: Starting...');
-  console.log('   ⚡ Mode: Hybrid (Centralized + Decentralized)');
-  console.log('═══════════════════════════════════════════════');
-  console.log('');
 });
 
 // Initialize IPFS in background (non-blocking)
 initIPFS().catch(err => {
   console.error('⚠️  IPFS initialization error:', err.message);
-  console.log('   Will continue with bootstrap nodes only');
 });
 
 // Re-publish nodes periodically
@@ -445,11 +418,8 @@ setInterval(() => {
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('\n\n🛑 Shutting down...');
   if (ipfs) {
-    console.log('   Stopping IPFS...');
     await ipfs.stop();
   }
-  console.log('   Goodbye! 👋\n');
   process.exit(0);
 });

@@ -36,7 +36,6 @@ async function main(){
   const ix = new TransactionInstruction({ keys, programId: PROGRAM_ID, data });
   const tx = new Transaction().add(ix);
   const sig = await provider.sendAndConfirm(tx, [kp]);
-  console.log(JSON.stringify({ tx: sig, sessionPda: sessionPda.toBase58() }));
 }
 
 main().catch(e=>{ console.error(e); process.exit(1) })

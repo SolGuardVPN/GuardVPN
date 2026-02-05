@@ -79,7 +79,6 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_sessions_state ON sessions(state);
     `);
 
-    console.log('✅ Database initialized');
   } finally {
     client.release();
   }

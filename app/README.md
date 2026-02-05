@@ -1,4 +1,4 @@
-# DVPN Electron Client
+# GVPN Electron Client
 
 Desktop application for connecting to the decentralized VPN network.
 
@@ -120,8 +120,8 @@ The app requires:
 ## Configuration Files
 
 - **Settings**: Stored in localStorage
-- **WireGuard Keys**: `~/.dvpn/client_private.key` and `~/.dvpn/client_public.key`
-- **WireGuard Config**: `~/.dvpn/dvpn.conf`
+- **WireGuard Keys**: `~/.gvpn/client_private.key` and `~/.gvpn/client_public.key`
+- **WireGuard Config**: `~/.gvpn/gvpn.conf`
 - **Session Data**: Stored in localStorage (auto-restore on app restart)
 
 ## Troubleshooting

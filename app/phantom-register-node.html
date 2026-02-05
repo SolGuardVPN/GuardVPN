@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register Node - GVPN</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3e 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+    }
+    
+    .container {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 40px;
+      max-width: 500px;
+      width: 90%;
+      text-align: center;
+    }
+    
+    .logo {
+      font-size: 48px;
+      margin-bottom: 10px;
+    }
+    
+    h1 {
+      color: #14F195;
+      margin-bottom: 10px;
+      font-size: 24px;
+    }
+    
+    .subtitle {
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 30px;
+    }
+    
+    .node-info {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+      text-align: left;
+    }
+    
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .info-row:last-child {
+      border-bottom: none;
+    }
+    
+    .info-label {
+      color: rgba(255, 255, 255, 0.6);
+    }
+    
+    .info-value {
+      color: #14F195;
+      font-family: monospace;
+      word-break: break-all;
+    }
+    
+    .btn {
+      width: 100%;
+      padding: 16px 24px;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-bottom: 10px;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #14F195 0%, #9945FF 100%);
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(20, 241, 149, 0.3);
+    }
+    
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 8px;
+      display: none;
+    }
+    
+    .status.error {
+      display: block;
+      background: rgba(255, 82, 82, 0.2);
+      border: 1px solid rgba(255, 82, 82, 0.5);
+      color: #ff5252;
+    }
+    
+    .status.success {
+      display: block;
+      background: rgba(20, 241, 149, 0.2);
+      border: 1px solid rgba(20, 241, 149, 0.5);
+      color: #14F195;
+    }
+    
+    .status.info {
+      display: block;
+      background: rgba(66, 165, 245, 0.2);
+      border: 1px solid rgba(66, 165, 245, 0.5);
+      color: #42A5F5;
+    }
+    
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: #14F195;
+      animation: spin 1s linear infinite;
+      margin-right: 10px;
+      vertical-align: middle;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .fee-note {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-top: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">🖥️</div>
+    <h1>Register Node On-Chain</h1>
+    <p class="subtitle">Sign transaction with Phantom wallet</p>
+    
+    <div class="node-info">
+      <div class="info-row">
+        <span class="info-label">Endpoint:</span>
+        <span class="info-value" id="endpoint">-</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Location:</span>
+        <span class="info-value" id="location">-</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Price/Hour:</span>
+        <span class="info-value" id="price">-</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Wallet:</span>
+        <span class="info-value" id="wallet">-</span>
+      </div>
+    </div>
+    
+    <button id="signBtn" class="btn btn-primary" onclick="signTransaction()">
+      🔗 Sign with Phantom
+    </button>
+    
+    <button class="btn btn-secondary" onclick="cancelTransaction()">
+      Cancel
+    </button>
+    
+    <p class="fee-note">⚡ Estimated fee: ~0.003 SOL (network + rent)</p>
+    
+    <div id="status" class="status"></div>
+  </div>
+
+  <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+  <script>
+    // Parse URL parameters
+    const params = new URLSearchParams(window.location.search);
+    const nodeData = {
+      endpoint: params.get('endpoint') || '',
+      location: params.get('location') || '',
+      region: params.get('region') || '',
+      pricePerHour: parseFloat(params.get('pricePerHour')) || 0.006,
+      wgPublicKey: params.get('wgPublicKey') || '',
+      walletAddress: params.get('walletAddress') || '',
+      programId: params.get('programId') || 'EYDWvx95gq6GhniDGHMHbn6DsigFhcWGHvHgbbxzuqQq',
+      rpcUrl: params.get('rpcUrl') || 'https://api.devnet.solana.com'
+    };
+    
+    // Display node info
+    document.getElementById('endpoint').textContent = nodeData.endpoint;
+    document.getElementById('location').textContent = nodeData.location;
+    document.getElementById('price').textContent = nodeData.pricePerHour + ' SOL';
+    document.getElementById('wallet').textContent = nodeData.walletAddress.substring(0, 8) + '...' + nodeData.walletAddress.slice(-6);
+    
+    function showStatus(message, type) {
+      const status = document.getElementById('status');
+      status.className = 'status ' + type;
+      status.textContent = message;
+    }
+    
+    // Generate Anchor instruction discriminator using Web Crypto API
+    async function generateDiscriminator(instructionName) {
+      const preimage = `global:${instructionName}`;
+      const encoder = new TextEncoder();
+      const data = encoder.encode(preimage);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      return new Uint8Array(hashBuffer).slice(0, 8);
+    }
+    
+    async function signTransaction() {
+      const signBtn = document.getElementById('signBtn');
+      signBtn.disabled = true;
+      signBtn.innerHTML = '<span class="spinner"></span> Connecting...';
+      
+      try {
+        // Check if Phantom is installed
+        if (!window.solana || !window.solana.isPhantom) {
+          throw new Error('Phantom wallet not found. Please install Phantom extension.');
+        }
+        
+        showStatus('Connecting to Phantom...', 'info');
+        
+        // Connect to Phantom
+        const resp = await window.solana.connect();
+        const publicKey = resp.publicKey;
+        
+        
+        // Verify wallet matches
+        if (publicKey.toBase58() !== nodeData.walletAddress) {
+          throw new Error(`Wrong wallet connected. Expected ${nodeData.walletAddress.substring(0, 8)}... but got ${publicKey.toBase58().substring(0, 8)}...`);
+        }
+        
+        showStatus('Building transaction...', 'info');
+        signBtn.innerHTML = '<span class="spinner"></span> Building TX...';
+        
+        // Build the register_node transaction
+        const { Connection, PublicKey, Transaction, TransactionInstruction, SystemProgram } = solanaWeb3;
+        
+        const connection = new Connection(nodeData.rpcUrl, 'confirmed');
+        const programId = new PublicKey(nodeData.programId);
+        
+        // Seeds for PDAs
+        const PROVIDER_SEED = new TextEncoder().encode('provider');
+        const NODE_SEED = new TextEncoder().encode('node');
+        
+        // Derive Provider PDA
+        const [providerPda] = PublicKey.findProgramAddressSync(
+          [PROVIDER_SEED, publicKey.toBuffer()],
+          programId
+        );
+        
+        // Check if provider exists, register if not
+        let providerAccount = await connection.getAccountInfo(providerPda);
+        if (!providerAccount) {
+          showStatus('Provider not found. Registering as provider first...', 'info');
+          signBtn.innerHTML = '<span class="spinner"></span> Registering Provider...';
+          
+          // Build register_provider instruction
+          // Generate Anchor discriminator for register_provider using SHA256
+          // discriminator = sha256("global:register_provider")[0:8]
+          const providerDiscriminator = await generateDiscriminator('register_provider');
+          
+          // register_provider takes NO arguments - just the discriminator
+          const providerInstructionData = providerDiscriminator;
+          
+          // Create provider instruction - KEY ORDER MATTERS!
+          // 1. authority (signer, writable) - wallet that owns the provider
+          // 2. provider PDA (not signer, writable) - the account to create
+          // 3. system_program (not signer, not writable)
+          const providerInstruction = new TransactionInstruction({
+            keys: [
+              { pubkey: publicKey, isSigner: true, isWritable: true },
+              { pubkey: providerPda, isSigner: false, isWritable: true },
+              { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+            ],
+            programId: programId,
+            data: providerInstructionData
+          });
+          
+          // Build and send provider registration transaction
+          const providerTx = new Transaction();
+          const latestBlockhash = await connection.getLatestBlockhash('confirmed');
+          providerTx.recentBlockhash = latestBlockhash.blockhash;
+          providerTx.feePayer = publicKey;
+          providerTx.add(providerInstruction);
+          
+          try {
+            const signedProviderTx = await window.solana.signTransaction(providerTx);
+            const providerSig = await connection.sendRawTransaction(signedProviderTx.serialize());
+            
+            // Wait for confirmation
+            await connection.confirmTransaction(providerSig, 'confirmed');
+            showStatus('Provider registered! Now registering node...', 'info');
+            
+            // Re-fetch provider account
+            providerAccount = await connection.getAccountInfo(providerPda);
+          } catch (providerError) {
+            console.error('Provider registration failed:', providerError);
+            throw new Error('Failed to register as provider: ' + providerError.message);
+          }
+        }
+        
+        // Generate unique node ID
+        const nodeId = BigInt(Date.now());
+        const nodeIdBuffer = new ArrayBuffer(8);
+        const nodeIdView = new DataView(nodeIdBuffer);
+        nodeIdView.setBigUint64(0, nodeId, true); // little-endian
+        
+        // Derive Node PDA
+        const [nodePda] = PublicKey.findProgramAddressSync(
+          [NODE_SEED, providerPda.toBuffer(), new Uint8Array(nodeIdBuffer)],
+          programId
+        );
+        
+        // Build instruction data
+        // Generate Anchor discriminator for register_node
+        const discriminator = await generateDiscriminator('register_node');
+        
+        // Encode parameters
+        const endpoint = nodeData.endpoint.substring(0, 80);
+        const region = nodeData.region.substring(0, 12);
+        const pricePerMinuteLamports = BigInt(Math.floor(nodeData.pricePerHour * 1e9 / 60));
+        const maxCapacity = 100;
+        const bandwidthMbps = 100;
+        
+        // Endpoint string (4 bytes length + string)
+        const endpointBytes = new TextEncoder().encode(endpoint);
+        const endpointBuffer = new Uint8Array(4 + endpointBytes.length);
+        new DataView(endpointBuffer.buffer).setUint32(0, endpointBytes.length, true);
+        endpointBuffer.set(endpointBytes, 4);
+        
+        // Region string
+        const regionBytes = new TextEncoder().encode(region);
+        const regionBuffer = new Uint8Array(4 + regionBytes.length);
+        new DataView(regionBuffer.buffer).setUint32(0, regionBytes.length, true);
+        regionBuffer.set(regionBytes, 4);
+        
+        // Price (8 bytes)
+        const priceBuffer = new ArrayBuffer(8);
+        new DataView(priceBuffer).setBigUint64(0, pricePerMinuteLamports, true);
+        
+        // WireGuard pubkey (32 bytes)
+        let wgPubkeyBytes = new Uint8Array(32);
+        if (nodeData.wgPublicKey) {
+          try {
+            const decoded = atob(nodeData.wgPublicKey);
+            const bytes = new Uint8Array(decoded.length);
+            for (let i = 0; i < decoded.length; i++) {
+              bytes[i] = decoded.charCodeAt(i);
+            }
+            if (bytes.length === 32) {
+              wgPubkeyBytes = bytes;
+            }
+          } catch (e) {
+          }
+        }
+        
+        // Capacity and bandwidth (4 bytes each)
+        const capacityBuffer = new ArrayBuffer(4);
+        new DataView(capacityBuffer).setUint32(0, maxCapacity, true);
+        
+        const bandwidthBuffer = new ArrayBuffer(4);
+        new DataView(bandwidthBuffer).setUint32(0, bandwidthMbps, true);
+        
+        // Combine all data
+        const instructionData = new Uint8Array([
+          ...discriminator,
+          ...new Uint8Array(nodeIdBuffer),
+          ...endpointBuffer,
+          ...regionBuffer,
+          ...new Uint8Array(priceBuffer),
+          ...wgPubkeyBytes,
+          ...new Uint8Array(capacityBuffer),
+          ...new Uint8Array(bandwidthBuffer)
+        ]);
+        
+        // Create instruction
+        const instruction = new TransactionInstruction({
+          keys: [
+            { pubkey: publicKey, isSigner: true, isWritable: true },
+            { pubkey: providerPda, isSigner: false, isWritable: true },
+            { pubkey: nodePda, isSigner: false, isWritable: true },
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+          ],
+          programId: programId,
+          data: instructionData
+        });
+        
+        // Create transaction
+        const transaction = new Transaction().add(instruction);
+        transaction.feePayer = publicKey;
+        
+        // Get recent blockhash
+        const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        
+        showStatus('Please approve in Phantom...', 'info');
+        signBtn.innerHTML = '<span class="spinner"></span> Approve in Phantom...';
+        
+        // Sign and send transaction
+        const signed = await window.solana.signAndSendTransaction(transaction);
+        
+        
+        showStatus('Confirming transaction...', 'info');
+        signBtn.innerHTML = '<span class="spinner"></span> Confirming...';
+        
+        // Wait for confirmation
+        const confirmation = await connection.confirmTransaction(signed.signature, 'confirmed');
+        
+        if (confirmation.value.err) {
+          throw new Error('Transaction failed: ' + JSON.stringify(confirmation.value.err));
+        }
+        
+        showStatus('✅ Node registered on-chain! Signature: ' + signed.signature.substring(0, 20) + '...', 'success');
+        signBtn.innerHTML = '✅ Success!';
+        signBtn.disabled = true;
+        
+        // Callback to Electron app
+        setTimeout(() => {
+          window.location.href = `http://localhost:8765/node-callback?success=true&signature=${signed.signature}&nodePda=${nodePda.toBase58()}`;
+        }, 2000);
+        
+      } catch (error) {
+        console.error('Transaction error:', error);
+        showStatus('❌ ' + error.message, 'error');
+        signBtn.disabled = false;
+        signBtn.innerHTML = '🔗 Sign with Phantom';
+      }
+    }
+    
+    function cancelTransaction() {
+      window.location.href = 'http://localhost:8765/node-callback?success=false&error=User%20cancelled';
+    }
+  </script>
+</body>
+</html>

@@ -178,15 +178,4 @@ app.get('/sessions', async (req, res) => {
 // Start server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log('');
-  console.log('═══════════════════════════════════════════════');
-  console.log('   DVPN Mock API Server');
-  console.log('═══════════════════════════════════════════════');
-  console.log(`   🌐 API: http://localhost:${PORT}`);
-  console.log(`   ✅ Health: http://localhost:${PORT}/health`);
-  console.log(`   📍 Nodes: http://localhost:${PORT}/nodes`);
-  console.log(`   📊 Sessions: http://localhost:${PORT}/sessions`);
-  console.log('');
-  console.log(`   Mock nodes available: ${mockNodes.length}`);
-  console.log('═══════════════════════════════════════════════');
 });

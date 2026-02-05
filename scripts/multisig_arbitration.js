@@ -38,9 +38,6 @@ class MultiSigArbitration {
     };
 
     // In production, this would be a new instruction in the Solana program
-    console.log('✅ Council initialized:', councilPda.toBase58());
-    console.log('   Arbitrators:', this.arbitrators.length);
-    console.log('   Threshold:', this.threshold);
 
     return councilPda;
   }
@@ -72,9 +69,6 @@ class MultiSigArbitration {
 
     this.pendingDisputes.set(proposalPda.toBase58(), proposal);
 
-    console.log('📋 Dispute proposal created:', proposalPda.toBase58());
-    console.log('   Session:', sessionPda.toBase58());
-    console.log('   Reason:', disputeReason);
 
     return proposalPda;
   }
@@ -125,9 +119,6 @@ class MultiSigArbitration {
 
     proposal.votes.push(voteData);
 
-    console.log(`🗳️  Vote cast by ${arbitratorKeypair.publicKey.toBase58().slice(0, 8)}...`);
-    console.log('   Decision:', voteData.decision);
-    console.log('   Votes:', proposal.votes.length, '/', this.threshold);
 
     // Check if threshold reached
     if (proposal.votes.length >= this.threshold) {
@@ -186,11 +177,6 @@ class MultiSigArbitration {
     proposal.outcome = outcome;
     proposal.resolved = true;
 
-    console.log('✅ Dispute resolved:');
-    console.log('   Decision:', majorityDecision);
-    console.log('   Refund:', outcome.refundPercentage, '%');
-    console.log('   Slash:', outcome.slashPercentage, '%');
-    console.log('   Consensus:', voteCount, '/', proposal.votes.length);
 
     // Execute the resolution on-chain
     await this.executeResolution(proposalPda, outcome);
@@ -223,8 +209,6 @@ class MultiSigArbitration {
         })
         .rpc();
 
-      console.log('🔗 Resolution executed on-chain');
-      console.log('   Transaction confirmed');
 
     } catch (error) {
       console.error('❌ Failed to execute resolution:', error.message);
@@ -385,7 +369,6 @@ async function exampleUsage() {
 
   // After 3 votes (threshold), dispute is automatically resolved
   const outcome = arbitration.getProposal(proposalPda).outcome;
-  console.log('Final outcome:', outcome);
 }
 
 module.exports = {

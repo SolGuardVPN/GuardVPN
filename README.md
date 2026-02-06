@@ -1,78 +1,93 @@
-# DVPN - Decentralized VPN on Solana Blockchain
+# GVPN - Fully Decentralized VPN on Solana
 
-[![Solana](https://img.shields.io/badge/Solana-Testnet-9945FF?style=flat&logo=solana)](https://testnet.solana.com)
-[![Anchor](https://img.shields.io/badge/Anchor-0.29.0-00D9FF?style=flat)](https://www.anchor-lang.com/)
+[![Solana](https://img.shields.io/badge/Solana-Devnet-9945FF?style=flat&logo=solana)](https://explorer.solana.com/?cluster=devnet)
+[![Anchor](https://img.shields.io/badge/Anchor-0.30.1-00D9FF?style=flat)](https://www.anchor-lang.com/)
 [![Rust](https://img.shields.io/badge/Rust-1.92.0-orange?style=flat&logo=rust)](https://www.rust-lang.org/)
 [![WireGuard](https://img.shields.io/badge/WireGuard-Enabled-88171A?style=flat&logo=wireguard)](https://www.wireguard.com/)
+[![IPFS](https://img.shields.io/badge/IPFS-P2P-65C2CB?style=flat&logo=ipfs)](https://ipfs.io/)
 
-A fully decentralized VPN service built on Solana blockchain with cryptographic payment proofs, WireGuard encryption, and trustless session management.
+A **100% decentralized** VPN service with **zero central servers**. Node discovery via Solana blockchain + IPFS PubSub. No APIs. No indexers. No single point of failure.
 
 ---
 
 ## 🎯 Overview
 
-**DVPN** enables users to connect to VPN nodes and pay with cryptocurrency while providers earn rewards for operating nodes. The system uses Solana blockchain for payments, WireGuard for secure tunneling, and cryptographic proofs for trustless verification.
+**GVPN** is a trustless, permissionless VPN network where:
+- **Node Discovery** happens entirely on-chain (Solana) and through IPFS PubSub
+- **No central API or indexer** - all data comes from blockchain and P2P network
+- **Payments** are handled via Solana smart contracts with escrow protection
+- **Privacy** is maximized with zero-logging VPN servers and military-grade encryption
 
 ### Key Features
 
-- ✅ **Blockchain-Based Payments** - All transactions on Solana blockchain
-- ✅ **Pay-As-You-Go** - Usage-based billing with escrow protection
-- ✅ **Cryptographic Proofs** - Hash-chain technology reduces on-chain transactions by 83%
-- ✅ **Military-Grade Encryption** - WireGuard protocol integration
-- ✅ **Decentralized Arbitration** - Multi-signature dispute resolution
-- ✅ **Real-Time Metering** - Precise bandwidth tracking and billing
-- ✅ **Multi-Token Support** - SOL and SPL tokens (USDC, etc.)
-- ✅ **Reputation System** - Provider scoring (0-2000) with uptime tracking
+- ✅ **100% Decentralized** - No central servers, APIs, or indexers
+- ✅ **On-Chain Discovery** - Nodes registered directly on Solana blockchain
+- ✅ **IPFS P2P** - Real-time node announcements via PubSub
+- ✅ **Zero Logging** - Complete privacy hardening on VPN servers
+- ✅ **WireGuard Encryption** - ChaCha20 + Curve25519 cryptography
+- ✅ **Blockchain Payments** - Escrow-protected SOL payments
+- ✅ **Subscription System** - On-chain subscription PDAs
 - ✅ **Desktop Client** - Electron app with Phantom wallet integration
+- ✅ **Multi-RPC Fallback** - Resilient Solana connectivity
 
 ---
 
 ## 🏗️ Architecture
 
-### System Components
+### Fully Decentralized Design
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        SOLANA BLOCKCHAIN                         │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │            DVPN Smart Contract (Anchor/Rust)             │  │
-│  │  • Provider Registry    • Session Escrow                 │  │
-│  │  • Node Management      • Payment Claims                 │  │
-│  │  │  • Reputation System    • Dispute Resolution             │  │
+│  │            GVPN Smart Contract (Anchor/Rust)              │  │
+│  │  • Node Registry (on-chain)    • Subscription PDAs       │  │
+│  │  • Provider Accounts           • Session Escrow          │  │
+│  │  • Payment Claims              • Reputation Scores       │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
                               ↕
-         ┌────────────────────┴────────────────────┐
-         │                                          │
-    ┌────▼────┐                              ┌─────▼──────┐
-    │ INDEXER │                              │   CLIENT   │
-    │ SERVICE │                              │  (Electron)│
-    ├─────────┤                              ├────────────┤
-    │PostgreSQL│◄─────Discovery───────────────│Phantom Wallet│
-    │REST API  │                              │WireGuard   │
-    └──────────┘                              └────────────┘
-                                                    │
-                                              VPN Connection
-                                                    │
-                                              ┌─────▼──────┐
-                                              │ VPN NODE   │
-                                              │  DAEMON    │
-                                              ├────────────┤
-                                              │WireGuard   │
-                                              │Bandwidth   │
-                                              │Tracking    │
-                                              └────────────┘
+                    Direct Blockchain Queries
+                              ↕
+┌─────────────────────────────────────────────────────────────────┐
+│                     IPFS PUBSUB NETWORK                          │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │           P2P Node Announcements (gvpn-nodes-v1)         │  │
+│  │  • Real-time node availability    • No central server    │  │
+│  │  • DHT-based discovery            • Censorship resistant │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+         ↕                                           ↕
+    ┌────▼────┐                              ┌──────▼──────┐
+    │ CLIENT  │                              │  VPN NODE   │
+    │(Electron)│◄───WireGuard Tunnel────────►│   DAEMON    │
+    ├─────────┤                              ├─────────────┤
+    │Phantom  │                              │WireGuard    │
+    │Wallet   │                              │Zero Logging │
+    │IPFS Node│                              │NAT + Egress │
+    └─────────┘                              └─────────────┘
 ```
+
+### No Central Points of Failure
+
+| What | Traditional VPN | GVPN |
+|------|----------------|------|
+| Node Discovery | Central API/Database | On-chain + IPFS PubSub |
+| Payment | Credit Card / PayPal | Solana Blockchain |
+| User Accounts | Central Database | Wallet PDAs |
+| Server List | API Endpoint | Blockchain Query |
+| Real-time Updates | WebSocket Server | IPFS PubSub P2P |
 
 ### Core Components
 
 | Component | Technology | Description | Location |
 |-----------|-----------|-------------|----------|
-| **Smart Contract** | Rust/Anchor | On-chain program handling payments, sessions, disputes | `programs/dvpn/` |
-| **Desktop Client** | Electron/JavaScript | User-facing app with wallet integration | `app/` |
-| **VPN Node Daemon** | Node.js/WireGuard | Provider software managing VPN connections | `scripts/node_daemon_server.js` |
-| **Indexer Service** | Node.js/PostgreSQL | Discovery service with REST API | `indexer/` |
-| **Test Scripts** | JavaScript/TypeScript | Comprehensive testing suite | `scripts/`, `tests/` |
+| **Smart Contract** | Rust/Anchor | On-chain program for nodes, subscriptions, payments | `programs/dvpn/` |
+| **Desktop Client** | Electron/JavaScript | User app with embedded IPFS node | `app/` |
+| **Decentralized Discovery** | Solana + IPFS | P2P node discovery module | `app/decentralized-discovery.js` |
+| **VPN Node Daemon** | Node.js/WireGuard | Provider software with zero logging | `scripts/` |
+| **Privacy Hardening** | Shell Scripts | Disable all logging on VPN servers | `scripts/privacy_hardening.sh` |
+| **Secure Egress** | iptables/NAT | Block private IPs, rate limits | `scripts/secure_wireguard_nat.sh` |
 
 ---
 
@@ -81,27 +96,22 @@ A fully decentralized VPN service built on Solana blockchain with cryptographic 
 ```
 fixed-DVPN/
 ├── programs/dvpn/          # Solana smart contract (Rust/Anchor)
-│   └── src/lib.rs          # Main program logic
+│   └── src/lib.rs          # On-chain: nodes, subscriptions, payments
 ├── app/                    # Electron desktop client
 │   ├── index.html          # Main UI
 │   ├── main.js             # Electron main process
-│   ├── renderer.js         # UI logic
-│   └── preload.js          # Bridge layer
-├── indexer/                # Node discovery service
-│   ├── index.js            # HTTP server
-│   ├── indexer.js          # Blockchain indexer
-│   ├── db.js               # PostgreSQL interface
-│   └── api.js              # REST API
-├── scripts/                # Testing & utilities
-│   ├── test_complete.js    # Full integration test
+│   ├── renderer.js         # UI logic + wallet integration
+│   ├── preload.js          # Bridge layer (IPC)
+│   └── decentralized-discovery.js  # Solana + IPFS node discovery
+├── scripts/                # Server & security scripts
+│   ├── privacy_hardening.sh     # Zero logging (kernel, WG, iptables, journald)
+│   ├── secure_wireguard_nat.sh  # NAT rules, egress restrictions
 │   ├── node_daemon_server.js    # VPN provider daemon
-│   ├── node_daemon_enhanced.js  # Enhanced daemon with metrics
-│   ├── hashchain_payment.js     # Cryptographic proofs
-│   └── multisig_arbitration.js  # Dispute resolution
+│   └── node_announcer.js        # IPFS PubSub announcer
 ├── tests/                  # Anchor tests
 ├── target/                 # Compiled outputs
 │   ├── deploy/             # Deployed program binary
-│   └── idl/                # Interface definitions
+│   └── idl/                # Interface definitions (JSON)
 ├── migrations/             # Deployment scripts
 ├── Anchor.toml             # Anchor configuration
 ├── Cargo.toml              # Rust dependencies
@@ -114,16 +124,13 @@ fixed-DVPN/
 
 ### Prerequisites
 
-Ensure you have the following installed:
-
 | Software | Version | Installation |
 |----------|---------|--------------|
 | **Rust** | 1.92.0+ | https://rustup.rs/ |
 | **Solana CLI** | 1.18.26+ | https://docs.solana.com/cli/install-solana-cli-tools |
-| **Anchor** | 0.29.0+ | https://www.anchor-lang.com/docs/installation |
+| **Anchor** | 0.30.1+ | https://www.anchor-lang.com/docs/installation |
 | **Node.js** | 16.0.0+ | https://nodejs.org/ |
 | **WireGuard** | Latest | https://www.wireguard.com/install/ |
-| **PostgreSQL** | 12.0+ | https://www.postgresql.org/download/ |
 
 ### Installation
 
@@ -134,9 +141,6 @@ cd fixed-DVPN
 
 # Install dependencies
 yarn install
-
-# Install indexer dependencies
-cd indexer && npm install && cd ..
 
 # Install app dependencies
 cd app && npm install && cd ..
@@ -151,15 +155,15 @@ cd app && npm install && cd ..
 
 2. **Configure Solana CLI:**
    ```bash
-   # For testnet
-   solana config set --url testnet
+   # For devnet (recommended)
+   solana config set --url devnet
    solana config set --keypair wallet.json
    
    # For local development
    solana config set --url localhost
    ```
 
-3. **Get Testnet SOL:**
+3. **Get Devnet SOL:**
    ```bash
    solana airdrop 2
    solana balance
@@ -180,25 +184,25 @@ solana-test-validator --reset
 
 ### Running Components
 
-#### 1. Start VPN Node (Provider)
-```bash
-# Basic daemon
-node scripts/node_daemon_server.js
-
-# Enhanced daemon with metrics
-node scripts/node_daemon_enhanced.js
-```
-
-#### 2. Start Indexer Service
-```bash
-cd indexer
-node index.js
-```
-
-#### 3. Launch Desktop Client
+#### 1. Launch Desktop Client
 ```bash
 cd app
 npm start
+```
+
+The client automatically:
+- Queries Solana blockchain for registered nodes
+- Starts embedded IPFS node for P2P discovery
+- Subscribes to `gvpn-nodes-v1` PubSub topic
+
+#### 2. Start VPN Node (For Providers)
+```bash
+# Apply security hardening first
+sudo bash scripts/privacy_hardening.sh
+sudo bash scripts/secure_wireguard_nat.sh
+
+# Start node daemon
+node scripts/node_daemon_server.js
 ```
 
 ---
@@ -249,20 +253,11 @@ yarn test
 
 ## 📖 Documentation
 
-Comprehensive documentation is available in the following files:
-
 | Document | Description |
 |----------|-------------|
-| [SETUP.md](SETUP.md) | Complete setup and installation guide |
-| [PROJECT_OVERVIEW_AND_DATAFLOW.md](PROJECT_OVERVIEW_AND_DATAFLOW.md) | System architecture and data flow |
-| [TESTING_GUIDE.md](TESTING_GUIDE.md) | Step-by-step testing instructions |
-| [ARCHITECTURE_AUDIT.md](ARCHITECTURE_AUDIT.md) | Component completion matrix |
-| [DEPLOY_MANUAL.md](DEPLOY_MANUAL.md) | Deployment procedures |
+| [SETUP.md](SETUP.md) | Setup and installation guide |
 | [WIREGUARD_CONNECT.md](WIREGUARD_CONNECT.md) | WireGuard integration guide |
-| [COMPLETE_IMPLEMENTATION_REPORT.md](COMPLETE_IMPLEMENTATION_REPORT.md) | Full implementation details |
-| [FINAL_SUCCESS_REPORT.md](FINAL_SUCCESS_REPORT.md) | Project completion report |
-| [scripts/HASHCHAIN_README.md](scripts/HASHCHAIN_README.md) | Hash-chain payment system |
-| [scripts/ARBITRATION_README.md](scripts/ARBITRATION_README.md) | Dispute resolution system |
+| [VPN_SERVER_SETUP.md](VPN_SERVER_SETUP.md) | VPN server configuration |
 | [app/README.md](app/README.md) | Desktop client documentation |
 | [indexer/README.md](indexer/README.md) | Indexer service documentation |
 
@@ -273,70 +268,73 @@ Comprehensive documentation is available in the following files:
 ### For Users (VPN Clients)
 
 1. **Connect Wallet** - Link your Phantom wallet with SOL
-2. **Select Node** - Browse available VPN nodes from indexer
-3. **Create Session** - Deposit SOL/tokens into escrow for session
-4. **Generate Keys** - Client generates WireGuard keypair
-5. **Connect** - Client connects to VPN node with WireGuard
-6. **Use VPN** - Encrypted traffic flows through WireGuard tunnel
-7. **Payment** - Provider claims payment based on usage
-8. **Disconnect** - Session ends, unused funds refunded
+2. **Discover Nodes** - Client queries Solana blockchain directly (no API)
+3. **Select Node** - Choose from on-chain registered nodes
+4. **Subscribe** - Create on-chain subscription PDA with SOL deposit
+5. **Generate Keys** - Client generates WireGuard keypair
+6. **Connect** - WireGuard tunnel to VPN node
+7. **Use VPN** - All traffic encrypted through tunnel
+8. **Renew/Cancel** - Manage subscription on-chain
 
 ### For Providers (VPN Node Operators)
 
-1. **Register Provider** - Create on-chain provider account with stake
+1. **Register Provider** - Create on-chain provider account
 2. **Register Node** - Add VPN node with endpoint, pricing, region
-3. **Run Daemon** - Start node daemon to manage connections
-4. **Accept Connections** - Daemon verifies sessions and provisions peers
-5. **Track Bandwidth** - Monitor and record data usage
-6. **Claim Payments** - Submit proofs and claim escrowed funds
-7. **Build Reputation** - Earn reputation score (0-2000) for reliability
+3. **Apply Security** - Run privacy_hardening.sh + secure_wireguard_nat.sh
+4. **Run Daemon** - Start node daemon with WireGuard
+5. **Announce P2P** - Optional IPFS PubSub for real-time discovery
+6. **Accept Connections** - Daemon provisions WireGuard peers
+7. **Earn SOL** - Receive subscription payments on-chain
 
-### Payment Flow
+### Subscription Flow
 
 ```
-User Creates Session
+User Connects Wallet
         ↓
-   Escrow Locked
+Discovers Nodes (On-Chain Query)
         ↓
-   VPN Connection
+Selects VPN Node
         ↓
-  Bandwidth Usage
+Creates Subscription PDA (pays SOL)
         ↓
-Provider Submits Proof
+Gets WireGuard Config
         ↓
-   Payment Claimed
+  VPN Connected
         ↓
- Unused Funds Refunded
+Subscription Expires → Renew On-Chain
 ```
 
 ---
 
 ## 🔒 Security Features
 
+### Zero Logging (Privacy Hardening)
+- **Kernel**: `log_martians=0`, no packet logging
+- **WireGuard**: Dynamic debug disabled
+- **iptables**: All LOG rules removed
+- **journald**: Volatile storage, warning-only
+- **rsyslog**: Completely disabled
+
+### Secure Egress (NAT Rules)
+- **Blocked**: Private IPs (10/8, 172.16/12, 192.168/16)
+- **Blocked**: Link-local, multicast, loopback
+- **Blocked**: SMTP ports (25, 465, 587) - prevents spam
+- **Rate Limited**: 50 connections/second per IP
+
 ### Cryptographic Security
 - **WireGuard Protocol** - ChaCha20 encryption, Curve25519 key exchange
-- **Ed25519 Signatures** - All session authorizations signed
-- **Hash-Chain Proofs** - Cryptographic payment verification
-
-### Economic Security
-- **Escrow System** - Funds locked until service delivered
-- **Provider Staking** - Collateral to prevent malicious behavior
-- **Slashing Mechanism** - Penalties for misconduct
-- **Reputation System** - Long-term incentive for good behavior
-
-### Dispute Resolution
-- **Multi-Sig Arbitration** - Decentralized dispute handling
-- **Weighted Voting** - Arbitrators vote with stakes
-- **Automatic Execution** - Resolutions enforced on-chain
+- **Ed25519 Signatures** - All transactions signed
+- **PDA Seeds** - Deterministic on-chain account derivation
 
 ---
 
 ## 🌐 Deployed Addresses
 
-### Testnet
-- **Program ID**: `2CK6gCxcfaX5JuCfJRnn7ZBf6V5ZpiK69T9yeHRJP7Vq`
-- **Network**: Solana Testnet
-- **RPC**: `https://api.testnet.solana.com`
+### Devnet (Current)
+- **Program ID**: `EYDWvx95gq6GhniDGHMHbn6DsigFhcWGHvHgbbxzuqQq`
+- **Network**: Solana Devnet
+- **RPC**: `https://api.devnet.solana.com`
+- **Explorer**: https://explorer.solana.com/?cluster=devnet
 
 ### Localnet (Development)
 - **Program ID**: Check `target/deploy/dvpn-keypair.json`
@@ -376,46 +374,25 @@ rm -rf target/
 
 ---
 
-## 📊 Program Instructions
+## 📊 On-Chain Instructions
 
 | Instruction | Description | Authority |
 |------------|-------------|-----------|
-| `register_provider` | Create provider account with stake | Provider |
-| `register_node` | Register VPN node with endpoint | Provider |
+| `register_provider` | Create provider account | Provider |
+| `register_node` | Register VPN node with endpoint, region, pricing | Provider |
 | `update_node` | Modify node details | Provider |
 | `deactivate_node` | Temporarily disable node | Provider |
 | `activate_node` | Re-enable deactivated node | Provider |
-| `create_session` | Open session with escrow (SOL) | User |
-| `create_session_spl` | Open session with SPL tokens | User |
-| `close_session` | End session, refund unused | Provider or User |
-| `claim_payout` | Claim session escrow | Provider |
-| `claim_chunk` | Claim partial payment with proof | Provider |
-| `increase_stake` | Add stake to provider | Provider |
-| `withdraw_stake` | Remove stake (with cooldown) | Provider |
-| `report_issue` | File dispute against provider | User |
-| `resolve_dispute` | Arbitrator resolves dispute | Arbitrator |
-| `update_reputation` | Modify provider reputation | Admin |
+| `create_subscription` | Create new subscription PDA with SOL payment | User |
+| `renew_subscription` | Renew expired/cancelled subscription | User |
+| `cancel_subscription` | Cancel active subscription | User |
 
 ---
 
-## 🗃️ Account Structures
-
-### Provider Account
-```rust
-pub struct Provider {
-    pub authority: Pubkey,           // Owner wallet
-    pub stake: u64,                  // Staked amount
-    pub reputation_score: u16,       // 0-2000
-    pub total_sessions: u64,         // Lifetime sessions
-    pub successful_sessions: u64,    // Completed sessions
-    pub total_bandwidth_gb: u64,     // Total data served
-    pub active_since: i64,           // Registration timestamp
-    pub last_uptime_update: i64,     // Last activity
-    pub dispute_count: u16,          // Number of disputes
-}
-```
+## 🗃️ On-Chain Account Structures
 
 ### Node Account (PDA)
+Seeds: `["node", provider_pubkey, node_id]`
 ```rust
 pub struct Node {
     pub provider: Pubkey,            // Provider authority
@@ -425,30 +402,33 @@ pub struct Node {
     pub pricing_per_gb: u64,         // Lamports per GB
     pub max_bandwidth_mbps: u32,     // Bandwidth capacity
     pub active: bool,                // Node status
-    pub total_sessions: u64,         // Sessions served
-    pub reputation_score: u16,       // Node-specific score
     pub created_at: i64,             // Registration time
-    pub last_seen: i64,              // Last heartbeat
-    pub supported_protocols: Vec<u8>, // Protocol versions
-    pub metadata_uri: String,        // IPFS metadata
 }
 ```
 
-### Session Account (PDA)
+### Subscription Account (PDA)
+Seeds: `["subscription", user_pubkey, node_pubkey]`
 ```rust
-pub struct Session {
+pub struct Subscription {
     pub user: Pubkey,                // Client wallet
-    pub provider: Pubkey,            // Provider wallet
     pub node: Pubkey,                // Node PDA
-    pub escrow_amount: u64,          // Deposited amount
-    pub start_time: i64,             // Session start
-    pub duration_seconds: u64,       // Max duration
-    pub bandwidth_used_bytes: u64,   // Data consumed
-    pub pricing_per_gb: u64,         // Rate at creation
-    pub is_active: bool,             // Connection status
-    pub last_proof_hash: [u8; 32],   // Latest proof
-    pub claimed_amount: u64,         // Amount withdrawn
-    pub spl_token_mint: Option<Pubkey>, // Token mint (if SPL)
+    pub start_time: i64,             // Subscription start
+    pub end_time: i64,               // Subscription end
+    pub amount_paid: u64,            // SOL paid (lamports)
+    pub is_active: bool,             // Active status
+    pub is_cancelled: bool,          // Cancellation status
+}
+```
+
+### Provider Account
+```rust
+pub struct Provider {
+    pub authority: Pubkey,           // Owner wallet
+    pub stake: u64,                  // Staked amount
+    pub reputation_score: u16,       // 0-2000
+    pub total_sessions: u64,         // Lifetime sessions
+    pub active_since: i64,           // Registration timestamp
+    pub last_uptime_update: i64,     // Last activity
 }
 ```
 
@@ -458,11 +438,11 @@ pub struct Session {
 
 ### Anchor.toml
 ```toml
-[programs.localnet]
-dvpn = "2CK6gCxcfaX5JuCfJRnn7ZBf6V5ZpiK69T9yeHRJP7Vq"
+[programs.devnet]
+dvpn = "EYDWvx95gq6GhniDGHMHbn6DsigFhcWGHvHgbbxzuqQq"
 
 [provider]
-cluster = "Localnet"
+cluster = "devnet"
 wallet = "wallet.json"
 
 [scripts]
@@ -484,20 +464,18 @@ test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
 
 ---
 
-## 📈 Performance Metrics
+## 📈 Performance
 
-### Hash-Chain Payment Optimization
-- **Traditional**: 1 transaction per payment claim
-- **Hash-Chain**: 1 transaction per 6 claims
-- **Savings**: 83% reduction in on-chain transactions
-- **Gas Saved**: ~80% lower transaction fees
+### Node Discovery
+- **On-Chain Query**: ~500-800ms (Solana RPC)
+- **IPFS PubSub**: Real-time (<100ms after announcement)
+- **Cache**: 60 seconds for on-chain, 5 minutes for PubSub
 
-### Benchmarks
-- **Session Creation**: ~4-6 seconds
-- **Payment Claim**: ~3-5 seconds
+### Transactions
+- **Subscription Creation**: ~4-6 seconds
+- **Subscription Renewal**: ~3-5 seconds
 - **Node Registration**: ~3-4 seconds
 - **WireGuard Connection**: <2 seconds
-- **Indexer Query**: <100ms
 
 ---
 
@@ -553,11 +531,19 @@ sudo wg-quick down wg0
 sudo wg-quick up wg0
 ```
 
-**Issue: Indexer can't connect to PostgreSQL**
+**Issue: IPFS node won't start**
 ```bash
-# Solution: Check PostgreSQL service
-sudo systemctl status postgresql
-sudo systemctl start postgresql
+# Solution: Remove corrupted IPFS repo
+rm -rf ./ipfs-dvpn-client
+# App will create fresh repo on next start
+```
+
+**Issue: Can't discover nodes**
+```bash
+# Solution: Check Solana RPC connectivity
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' \
+  https://api.devnet.solana.com
 ```
 
 ---
@@ -588,33 +574,33 @@ For issues, questions, or contributions:
 
 ## ✅ Project Status
 
-**Current Version**: v1.0.0 - Production Ready  
-**Last Updated**: January 12, 2026  
-**Status**: ✅ Core MVP Complete
+**Current Version**: v2.0.0 - Fully Decentralized  
+**Last Updated**: February 6, 2026  
+**Status**: ✅ Production Ready
 
 ### Implemented Features
-- ✅ Provider and node registration
-- ✅ Session creation with escrow (SOL & SPL)
-- ✅ WireGuard VPN integration
-- ✅ Payment claims with cryptographic proofs
-- ✅ Hash-chain payment optimization
-- ✅ Reputation system (0-2000 scoring)
-- ✅ Partial refunds and session closing
-- ✅ Stake management (increase/withdraw)
-- ✅ Dispute reporting and resolution
-- ✅ Multi-signature arbitration
-- ✅ Desktop Electron client
-- ✅ PostgreSQL indexer with REST API
-- ✅ Comprehensive test suite
+- ✅ **100% Decentralized** - No central servers or APIs
+- ✅ **On-Chain Node Discovery** - Query Solana blockchain directly
+- ✅ **IPFS PubSub** - Real-time P2P node announcements
+- ✅ **Subscription System** - On-chain subscription PDAs
+- ✅ **Subscription Renewal** - Renew expired subscriptions
+- ✅ **Zero Logging** - Complete privacy hardening
+- ✅ **Secure Egress** - Block private IPs, rate limiting
+- ✅ **WireGuard VPN** - Military-grade encryption
+- ✅ **Phantom Wallet** - Seamless wallet integration
+- ✅ **Multi-RPC Fallback** - Resilient Solana connectivity
+- ✅ **Desktop Electron Client** - Cross-platform app
+
+### Security Scripts
+- ✅ `privacy_hardening.sh` - Disable all logging
+- ✅ `secure_wireguard_nat.sh` - Egress restrictions
 
 ### Future Roadmap
-- 🔜 Enhanced arbitration automation
 - 🔜 Mobile client (iOS/Android)
-- 🔜 Decentralized node discovery (DHT)
-- 🔜 Advanced analytics dashboard
+- 🔜 Mainnet deployment
 - 🔜 Multi-hop VPN routing
-- 🔜 Token incentives for early adopters
+- 🔜 Token incentives (GVPN token)
 
 ---
 
-**Built with ❤️ on Solana**
+**Built with ❤️ on Solana | No APIs | No Central Servers | 100% Decentralized**

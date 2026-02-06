@@ -1103,16 +1103,40 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupRefreshButtons();
   setupProviderDashboard();
   setupSubscriptionCodeHandler();
+  setupLogoutButton();
   
-  // Clear only wallet session data, keep IPFS CID references
-  localStorage.removeItem('walletPublicKey');
-  localStorage.removeItem('walletType');
+  // Try to restore previous session
+  const savedWallet = localStorage.getItem('walletPublicKey');
+  const savedWalletType = localStorage.getItem('walletType');
   
-  // Show onboarding - wallet connection page
-  switchToTab('onboardingTab');
+  if (savedWallet) {
+    console.log('📱 Restoring previous wallet session:', savedWallet.slice(0, 8) + '...');
+    state.wallet = savedWallet;
+    state.walletConnected = true;
+    state.walletType = savedWalletType || 'unknown';
+    updateWalletDisplay();
+    
+    // Check subscription for this wallet
+    const hasSubscription = await checkActiveSubscription();
+    console.log('📱 Has active subscription:', hasSubscription);
+    
+    if (hasSubscription) {
+      // User has subscription - go to home
+      switchToTab('homeTab');
+      await loadNodesFromIndexer();
+      drawWorldMap();
+      showToast('Welcome back!', 'success');
+    } else {
+      // Wallet restored but no subscription - show subscription page
+      switchToTab('subscriptionTab');
+      updateSubscriptionWalletDisplay();
+    }
+  } else {
+    // No saved wallet - show onboarding
+    switchToTab('onboardingTab');
+  }
   
 });
-
 // Set up listener for Phantom wallet callbacks
 function setupPhantomCallbackListener() {
   if (window.electron && window.electron.onPhantomCallback) {
@@ -1148,6 +1172,37 @@ function setupPhantomCallbackListener() {
         }
       } else if (result.error) {
         showToast('❌ Phantom error: ' + result.error, 'error');
+      }
+    });
+  }
+  
+  // Listen for transaction callbacks (subscription completion)
+  if (window.electron && window.electron.onTransactionCallback) {
+    window.electron.onTransactionCallback(async (result) => {
+      console.log('📡 Transaction callback received:', result);
+      
+      if (result.success && result.signature) {
+        showToast('✅ Subscription activated!', 'success');
+        
+        // Update local state with subscription
+        state.subscription = {
+          plan: result.plan || 'monthly',
+          priceSOL: result.priceSOL || 0,
+          signature: result.signature,
+          createdAt: Date.now(),
+          expiresAt: Date.now() + (result.durationDays || 30) * 24 * 60 * 60 * 1000,
+          walletAddress: state.wallet
+        };
+        
+        // Save to localStorage
+        localStorage.setItem('subscriptionData', JSON.stringify(state.subscription));
+        
+        // Move to home tab
+        switchToTab('homeTab');
+        await loadNodesFromIndexer();
+        drawWorldMap();
+      } else if (result.error) {
+        showToast('❌ Transaction failed: ' + result.error, 'error');
       }
     });
   }
@@ -1292,6 +1347,7 @@ async function checkActiveSubscription() {
     try {
       const sub = JSON.parse(subscriptionData);
       const now = Date.now();
+      console.log('📋 Checking cached subscription:', {
         plan: sub.plan,
         expiresAt: new Date(sub.expiresAt).toISOString(),
         walletAddress: sub.walletAddress,
@@ -1695,9 +1751,35 @@ function setupWalletConnection() {
 function disconnectWallet() {
   state.wallet = null;
   state.walletConnected = false;
+  state.subscription = null;
+  
+  // Clear all stored data
   localStorage.removeItem('walletPublicKey');
+  localStorage.removeItem('walletType');
+  localStorage.removeItem('subscriptionData');
+  
+  // Clear subscription file via main process
+  if (window.electron && window.electron.clearSubscription) {
+    window.electron.clearSubscription();
+  }
+  
   updateWalletDisplay();
   showToast('Wallet disconnected', 'info');
+  
+  // Go back to onboarding so user can connect different wallet
+  switchToTab('onboardingTab');
+}
+
+// Setup logout button in sidebar
+function setupLogoutButton() {
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      if (state.walletConnected) {
+        disconnectWallet();
+      }
+    });
+  }
 }
 
 function updateWalletDisplay() {
@@ -1705,11 +1787,13 @@ function updateWalletDisplay() {
   const walletAddress = document.getElementById('walletAddress');
   const connectBtn = document.getElementById('connectWalletBtn');
   const sidebarWalletAddress = document.getElementById('sidebarWalletAddress');
+  const logoutBtn = document.getElementById('logoutBtn');
   
   if (state.walletConnected && state.wallet) {
     if (walletInfo) walletInfo.style.display = 'block';
     if (walletAddress) walletAddress.textContent = truncateAddress(state.wallet);
     if (sidebarWalletAddress) sidebarWalletAddress.textContent = truncateAddress(state.wallet);
+    if (logoutBtn) logoutBtn.style.display = 'flex';
     if (connectBtn) {
       connectBtn.textContent = 'Disconnect';
       connectBtn.style.background = '#2A2A2A';
@@ -1718,6 +1802,7 @@ function updateWalletDisplay() {
   } else {
     if (walletInfo) walletInfo.style.display = 'none';
     if (sidebarWalletAddress) sidebarWalletAddress.textContent = 'Not Connected';
+    if (logoutBtn) logoutBtn.style.display = 'none';
     if (connectBtn) {
       connectBtn.textContent = 'Connect Wallet';
       connectBtn.style.background = '#00D4AA';

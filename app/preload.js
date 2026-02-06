@@ -109,6 +109,10 @@ contextBridge.exposeInMainWorld('electron', {
   onPhantomCallback: (callback) =>
     ipcRenderer.on('phantom-callback', (event, data) => callback(data)),
   
+  // Listen for Transaction callbacks (subscription completion)
+  onTransactionCallback: (callback) =>
+    ipcRenderer.on('transaction-callback', (event, data) => callback(data)),
+  
   processPayment: (paymentData) => 
     ipcRenderer.invoke('process-payment-wallet', paymentData),
   

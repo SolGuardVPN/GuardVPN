@@ -388,6 +388,38 @@ app.whenReady().then(() => {
     }
   });
   
+  // Set up callback for transaction completion (subscriptions)
+  phantomConnect.setOnTransactionCallback((result) => {
+    console.log('[Main] Transaction callback received:', result);
+    
+    // Focus the main window
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+      mainWindow.show();
+    }
+    
+    // If transaction was successful, save the subscription
+    if (result.success && result.signature) {
+      const subscription = {
+        plan: result.plan || 'monthly',
+        priceSOL: result.priceSOL || 0,
+        signature: result.signature,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + (result.durationDays || 30) * 24 * 60 * 60 * 1000,
+        walletAddress: phantomConnect.getPublicKey()
+      };
+      
+      console.log('[Main] Saving subscription:', subscription);
+      saveSubscriptionToFile(subscription);
+    }
+    
+    // Send result to renderer
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('transaction-callback', result);
+    }
+  });
+  
   // Start the Phantom server early so it's ready
   phantomConnect.startServer();
 });

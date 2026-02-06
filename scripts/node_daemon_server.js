@@ -14,15 +14,39 @@ const lockfile = require('proper-lockfile');
 
 // flags
 const DRY_RUN = process.env.DRY_RUN === '1' || process.argv.includes('--dry-run');
+const PRIVATE_MODE = process.env.PRIVATE_MODE === '1' || process.argv.includes('--private');
 
-// simple JSON-line structured logger
-const LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
-const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+// Privacy-focused logging
+// LOG_LEVEL: error (production), warn, info, debug
+// PRIVATE_MODE: strips all PII (IPs, pubkeys, session IDs)
+const LEVELS = { none: -1, error: 0, warn: 1, info: 2, debug: 3 };
+const LOG_LEVEL = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'error' : 'info');
+
+function sanitizeMeta(meta) {
+  if (!PRIVATE_MODE || !meta) return meta;
+  const sanitized = { ...meta };
+  // Strip potentially identifying information
+  const piiKeys = ['sessionPda', 'clientWgPubkey', 'assignedIp', 'user', 'userPk', 'ip', 'pubkey'];
+  for (const key of piiKeys) {
+    if (sanitized[key]) sanitized[key] = '[REDACTED]';
+  }
+  return sanitized;
+}
+
 function log(level, msg, meta){
   const lvlNum = LEVELS[level] ?? 2;
   const curNum = LEVELS[LOG_LEVEL] ?? 2;
   if (lvlNum > curNum) return;
-  const out = Object.assign({ ts: new Date().toISOString(), level, msg }, meta || {});
+  
+  // In private mode, redact all PII
+  const safeMeta = sanitizeMeta(meta);
+  
+  // Minimal output in production
+  if (process.env.NODE_ENV === 'production' && level !== 'error') {
+    return; // Only log errors in production
+  }
+  
+  const out = Object.assign({ ts: new Date().toISOString(), level, msg }, safeMeta || {});
   try{ process.stdout.write(JSON.stringify(out) + '\n'); }catch(e){ /* ignore */ }
 }
 

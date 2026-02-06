@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, Mint, TokenAccount, Transfer};
 
-declare_id!("HJ3a4jtmfcMRpemKpYVFQH9vPbauKNzJAdtmxzKvRP3f");
+declare_id!("EYDWvx95gq6GhniDGHMHbn6DsigFhcWGHvHgbbxzuqQq");
 
 pub const PROVIDER_SEED: &[u8] = b"provider";
 pub const NODE_SEED: &[u8] = b"node";
@@ -470,6 +470,54 @@ pub mod dvpn {
         subscription.end_ts = now + duration_seconds;
         subscription.state = SubscriptionState::Active;
         subscription.bump = ctx.bumps.subscription;
+
+        Ok(())
+    }
+
+    // Renew subscription - for expired/cancelled subscriptions
+    pub fn renew_subscription(
+        ctx: Context<RenewSubscription>,
+        plan: SubscriptionPlan,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        
+        // Verify the subscription belongs to this user
+        require_keys_eq!(ctx.accounts.subscription.user, ctx.accounts.user.key(), DvpnError::Unauthorized);
+        
+        // Only allow renewal if expired or cancelled
+        let is_expired = now >= ctx.accounts.subscription.end_ts;
+        let is_cancelled = ctx.accounts.subscription.state == SubscriptionState::Cancelled;
+        require!(is_expired || is_cancelled, DvpnError::SubscriptionStillActive);
+
+        // Calculate price and duration based on plan
+        let (price_lamports, duration_seconds) = match plan {
+            SubscriptionPlan::Weekly => (30_000_000, 7 * 24 * 60 * 60),      // 0.03 SOL, 7 days
+            SubscriptionPlan::Monthly => (100_000_000, 30 * 24 * 60 * 60),   // 0.1 SOL, 30 days
+            SubscriptionPlan::Yearly => (600_000_000, 365 * 24 * 60 * 60),   // 0.6 SOL, 365 days
+        };
+
+        // Transfer SOL from user -> subscription PDA (escrow)
+        let ix = anchor_lang::solana_program::system_instruction::transfer(
+            &ctx.accounts.user.key(),
+            &ctx.accounts.subscription.key(),
+            price_lamports,
+        );
+        anchor_lang::solana_program::program::invoke(
+            &ix,
+            &[
+                ctx.accounts.user.to_account_info(),
+                ctx.accounts.subscription.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+
+        // Update subscription
+        let subscription = &mut ctx.accounts.subscription;
+        subscription.plan = plan;
+        subscription.escrow_lamports = price_lamports;
+        subscription.start_ts = now;
+        subscription.end_ts = now + duration_seconds;
+        subscription.state = SubscriptionState::Active;
 
         Ok(())
     }
@@ -1056,6 +1104,22 @@ pub struct CreateSubscription<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(plan: SubscriptionPlan)]
+pub struct RenewSubscription<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [SUBSCRIPTION_SEED, user.key().as_ref()],
+        bump = subscription.bump
+    )]
+    pub subscription: Account<'info, Subscription>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct CancelSubscription<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
@@ -1444,6 +1508,8 @@ pub enum DvpnError {
     SubscriptionExists,
     #[msg("Subscription not expired")]
     SubscriptionNotExpired,
+    #[msg("Subscription still active - cannot renew yet")]
+    SubscriptionStillActive,
     #[msg("Subscription already claimed")]
     SubscriptionAlreadyClaimed,
     #[msg("Pool already finalized")]

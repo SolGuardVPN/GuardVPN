@@ -463,6 +463,38 @@ body:has(#subscriptionTab.active) .sidebar {
   opacity: 0.9;
 }
 
+/* Logout/Switch Wallet Button */
+.wallet-info-sidebar {
+  position: relative;
+}
+
+.logout-btn {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logout-btn:hover {
+  background: rgba(255, 77, 77, 0.15);
+  color: #FF4D4D;
+}
+
+.logout-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
 .disconnect-btn {
   width: 100%;
   padding: 12px;
